@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import ToCsvButton from '../../../components/ToCsvButton';
+import ToExcelButton from '../../../components/ToExcelButton';
 
 export default function ZeroStocksPage() {
   const [data] = useState([
@@ -15,10 +17,10 @@ export default function ZeroStocksPage() {
   ]);
 
   const tabs = [
-    { label: 'Stocks', path: '/' },
-    { label: 'Products Summary', path: '/' },
+    { label: 'Stocks', path: '/stocks/product-summary' },
+    { label: 'Products Summary', path: '/stocks/product-summary' },
     { label: 'Low Demand Stock', path: '#' },
-    { label: 'Zero Stocks', path: '/zero-stocks', active: true },
+    { label: 'Zero Stocks', path: '/stocks/zero-stocks', active: true },
     { label: 'Age Wise Stocks', path: '#' },
     { label: 'Low Quantity', path: '#' },
     { label: 'Expired', path: '#' },
@@ -26,10 +28,10 @@ export default function ZeroStocksPage() {
     { label: 'Approved', path: '#' },
     { label: 'Purchase Return Items', path: '#' },
     { label: 'Stock Report', path: '#' },
-    { label: 'Stock Report Batch Wise', path: '/stock-report-batch-wise' },
+    { label: 'Stock Report Batch Wise', path: '/stocks/stock-report-batch-wise' },
     { label: 'Category Wise Product', path: '#' },
     { label: 'Transaction Report', path: '#' },
-    { label: 'ProductWise Customer', path: '/product-wise-customer' },
+    { label: 'ProductWise Customer', path: '/sales/product-wise-customer' },
   ];
 
   const sortIcon = (
@@ -116,8 +118,8 @@ export default function ZeroStocksPage() {
         </select>
 
         {/* Action Buttons */}
-        <button className="bg-[#17A2B8] hover:bg-[#138496] text-[#FFFFFF] px-[7.2px] py-[3.6px] ml-[7.2px] rounded-[3px] text-[12.6px] h-[28.09px] border border-[#17A2B8] flex items-center justify-center">TO CSV</button>
-        <button className="bg-[#FFC107] hover:bg-[#e0a800] text-[#212529] px-[7.2px] py-[3.6px] ml-[7.2px] rounded-[3px] text-[12.6px] h-[28.09px] border border-[#FFC107] flex items-center justify-center">TO EXCEL</button>
+        <ToCsvButton className="ml-[7.2px]" />
+        <ToExcelButton className="ml-[7.2px]" />
       </div>
 
       {/* Data Table */}
