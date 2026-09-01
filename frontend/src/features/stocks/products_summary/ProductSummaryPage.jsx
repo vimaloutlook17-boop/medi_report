@@ -107,6 +107,7 @@ export default function ProductSummaryPage() {
             { label: 'Stock Report Batch Wise', path: '/stock-report-batch-wise' },
             { label: 'Category Wise Product', path: '#' },
             { label: 'Transaction Report', path: '#' },
+            { label: 'ProductWise Customer', path: '/product-wise-customer' },
           ].map((tab, i) => (
             <li key={i} className="mr-[2px] mb-[-1px]">
               {tab.active ? (

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import ProductSummaryPage from './features/stocks/products_summary/ProductSummaryPage';
 import StockReportBatchWisePage from './features/stocks/stock_report_batch_wise/StockReportBatchWisePage';
 import ZeroStocksPage from './features/stocks/zero_stocks/ZeroStocksPage';
+import ProductWiseCustomerList from './features/sales/product_wise_customer/ProductWiseCustomerList';
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
               <Route path="/" element={<ProductSummaryPage />} />
               <Route path="/stock-report-batch-wise" element={<StockReportBatchWisePage />} />
               <Route path="/zero-stocks" element={<ZeroStocksPage />} />
+              <Route path="/product-wise-customer" element={<ProductWiseCustomerList />} />
             </Routes>
           </div>
         </div>
@@ -25,3 +27,4 @@ export default function App() {
     </Router>
   );
 }
+
