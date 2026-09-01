@@ -29,6 +29,7 @@ export default function ZeroStocksPage() {
     { label: 'Stock Report Batch Wise', path: '/stock-report-batch-wise' },
     { label: 'Category Wise Product', path: '#' },
     { label: 'Transaction Report', path: '#' },
+    { label: 'ProductWise Customer', path: '/product-wise-customer' },
   ];
 
   const sortIcon = (
