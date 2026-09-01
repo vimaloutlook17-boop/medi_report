@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import ToCsvButton from '../../../components/ToCsvButton';
+import ToExcelButton from '../../../components/ToExcelButton';
+import ToPrintButton from '../../../components/ToPrintButton';
 
 export default function StockReportBatchWisePage() {
   const data = [
@@ -20,10 +23,10 @@ export default function StockReportBatchWisePage() {
       <div className="mb-[20px]">
         <ul className="flex flex-wrap m-0 p-0 list-none text-[12.96px] text-[#212529] font-sans border-b border-[#ddd]">
           {[
-            { label: 'Stocks', path: '/' },
-            { label: 'Products Summary', path: '/' },
+            { label: 'Stocks', path: '/stocks/product-summary' },
+            { label: 'Products Summary', path: '/stocks/product-summary' },
             { label: 'Low Demand Stock', path: '#' },
-            { label: 'Zero Stocks', path: '/zero-stocks' },
+            { label: 'Zero Stocks', path: '/stocks/zero-stocks' },
             { label: 'Age Wise Stocks', path: '#' },
             { label: 'Low Quantity', path: '#' },
             { label: 'Expired', path: '#' },
@@ -31,10 +34,10 @@ export default function StockReportBatchWisePage() {
             { label: 'Approved', path: '#' },
             { label: 'Purchase Return Items', path: '#' },
             { label: 'Stock Report', path: '#' },
-            { label: 'Stock Report Batch Wise', path: '/stock-report-batch-wise', active: true },
+            { label: 'Stock Report Batch Wise', path: '/stocks/stock-report-batch-wise', active: true },
             { label: 'Category Wise Product', path: '#' },
             { label: 'Transaction Report', path: '#' },
-            { label: 'ProductWise Customer', path: '/product-wise-customer' },
+            { label: 'ProductWise Customer', path: '/sales/product-wise-customer' },
           ].map((tab, i) => (
             <li key={i} className="mr-[2px] mb-[-1px]">
               {tab.active ? (
@@ -121,9 +124,9 @@ export default function StockReportBatchWisePage() {
         </div>
 
         {/* Action Buttons */}
-        <button className="bg-[#17A2B8] hover:bg-[#138496] text-[#FFFFFF] px-[7.2px] py-[3.6px] ml-[7.2px] rounded-[3px] text-[12.6px] h-[28.09px] border border-[#17A2B8] flex items-center justify-center">TO CSV</button>
-        <button className="bg-[#FFC107] hover:bg-[#e0a800] text-[#212529] px-[7.2px] py-[3.6px] ml-[7.2px] rounded-[3px] text-[12.6px] h-[28.09px] border border-[#FFC107] flex items-center justify-center">TO EXCEL</button>
-        <button className="bg-[#28A745] hover:bg-[#218838] text-[#FFFFFF] px-[7.2px] py-[3.6px] ml-[7.2px] rounded-[3px] text-[12.6px] h-[28.09px] border border-[#28A745] flex items-center justify-center">TO PRINT</button>
+        <ToCsvButton className="ml-[7.2px]" />
+        <ToExcelButton className="ml-[7.2px]" />
+        <ToPrintButton className="ml-[7.2px]" />
       </div>
 
       {/* Data Table */}
