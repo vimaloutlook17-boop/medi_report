@@ -1,45 +1,27 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends, HTTPException
 from typing import Optional
 from app.db import get_db_cursor
+from app.auth import verify_token
 
 router = APIRouter()
-
-DEFAULT_SHOP_ID = 477
 
 @router.get("/")
 def get_product_wise_customer(
     item_id: Optional[int] = None,
-    shop_id: Optional[int] = None,
     fdate: Optional[str] = None,
     tdate: Optional[str] = None,
     customer_name: Optional[str] = None,
     page: int = 0,
     size: int = 10,
     sort_field: Optional[str] = "created_at",
-    sort_order: Optional[str] = "asc"
+    sort_order: Optional[str] = "asc",
+    shop_id: int = Depends(verify_token)
 ):
     """
     Get paginated bill details for a selected item/product (Product Wise Customer Report).
-    Hardcoded for shop_id = 477 by default, showing live data from the database.
+    Securely extracts shop_id from the verified JWT token.
     """
-    effective_shop_id = shop_id if shop_id is not None else DEFAULT_SHOP_ID
-
-    # If no item_id is supplied, default to the top product with sales for shop 477 (44991 - 10ML NIPRO)
-    if not item_id:
-        try:
-            with get_db_cursor() as cursor:
-                cursor.execute(
-                    "SELECT bd.item_id FROM bill_details bd WHERE bd.shop_id = %s AND bd.cust_id != 0 GROUP BY bd.item_id ORDER BY COUNT(*) DESC LIMIT 1",
-                    [effective_shop_id]
-                )
-                top_row = cursor.fetchone()
-                if top_row and top_row.get('item_id'):
-                    item_id = top_row['item_id']
-                else:
-                    item_id = 44991
-        except Exception:
-            item_id = 44991
-
+    effective_shop_id = shop_id
     offset = page * size
     
     def normalize_date(d_str: Optional[str]) -> Optional[str]:
@@ -167,15 +149,50 @@ def get_product_wise_customer(
         }
 
 
+@router.get("/default-product")
+def get_default_product(
+    shop_id: int = Depends(verify_token)
+):
+    """
+    Get top selling product for the logged-in shop to set initial dropdown selection.
+    """
+    try:
+        with get_db_cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT bd.item_id AS id, i.name, CONCAT(i.name, ' (ID: ', bd.item_id, ')') AS label
+                FROM bill_details bd
+                LEFT JOIN item i ON bd.item_id = i.id
+                WHERE bd.shop_id = %s AND bd.cust_id != 0
+                GROUP BY bd.item_id, i.name
+                ORDER BY COUNT(*) DESC
+                LIMIT 1
+                """,
+                [shop_id]
+            )
+            row = cursor.fetchone()
+            if row and row.get('id'):
+                return row
+            
+            cursor.execute(
+                "SELECT id, name, CONCAT(name, ' (ID: ', id, ')') AS label FROM item WHERE shop_id = %s ORDER BY name ASC LIMIT 1",
+                [shop_id]
+            )
+            row2 = cursor.fetchone()
+            return row2 or {"id": None, "name": "", "label": ""}
+    except Exception as e:
+        print(f"Error fetching default product: {e}")
+        return {"id": None, "name": "", "label": ""}
+
+
 @router.get("/search-items")
 def search_items(
     term: str = Query(..., min_length=2, description="Search term for products"),
-    shop_id: Optional[int] = None
+    shop_id: int = Depends(verify_token)
 ):
     """
-    Autocomplete search for medicines / products from item table for shop_id 477.
+    Autocomplete search for medicines / products from item table for the authenticated shop.
     """
-    effective_shop_id = shop_id if shop_id is not None else DEFAULT_SHOP_ID
     search_pattern = f"%{term.strip()}%"
     
     sql = """
@@ -187,7 +204,7 @@ def search_items(
     """
     try:
         with get_db_cursor() as cursor:
-            cursor.execute(sql, [effective_shop_id, search_pattern, search_pattern])
+            cursor.execute(sql, [shop_id, search_pattern, search_pattern])
             return cursor.fetchall()
     except Exception as e:
         print(f"Error searching items: {e}")
@@ -197,12 +214,11 @@ def search_items(
 @router.get("/search-patients")
 def search_patients(
     term: str = Query(..., min_length=3, description="Search term for customers/patients"),
-    shop_id: Optional[int] = None
+    shop_id: int = Depends(verify_token)
 ):
     """
-    Autocomplete search for customers / patients from customer_details table for shop_id 477.
+    Autocomplete search for customers / patients from customer_details table for the authenticated shop.
     """
-    effective_shop_id = shop_id if shop_id is not None else DEFAULT_SHOP_ID
     search_pattern = f"%{term.strip()}%"
     
     sql = """
@@ -214,7 +230,7 @@ def search_patients(
     """
     try:
         with get_db_cursor() as cursor:
-            cursor.execute(sql, [effective_shop_id, search_pattern, search_pattern])
+            cursor.execute(sql, [shop_id, search_pattern, search_pattern])
             return cursor.fetchall()
     except Exception as e:
         print(f"Error searching patients: {e}")

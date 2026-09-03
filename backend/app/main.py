@@ -38,4 +38,11 @@ def read_root():
 
 
 if __name__ == '__main__':
-    uvicorn.run('app.main:app', host='0.0.0.0', port=8000, reload=True)
+    import os
+    from dotenv import load_dotenv
+    dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+    if os.path.exists(dotenv_path):
+        load_dotenv(dotenv_path)
+    host = os.getenv('HOST', os.getenv('BACKEND_HOST', '0.0.0.0'))
+    port = int(os.getenv('PORT', '8000'))
+    uvicorn.run('app.main:app', host=host, port=port, reload=True)
