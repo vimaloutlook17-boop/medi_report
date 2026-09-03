@@ -1,8 +1,16 @@
 import jwt
 import datetime
+import os
+from dotenv import load_dotenv
 from fastapi import Header, HTTPException
 
-SECRET_KEY = "your-super-secret-production-key"  # Change this in production!
+dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+if os.path.exists(dotenv_path):
+    load_dotenv(dotenv_path)
+else:
+    load_dotenv()
+
+SECRET_KEY = os.getenv("SECRET_KEY", "medi_reports_jwt_secret_key_prod_2026")
 ALGORITHM = "HS256"
 
 def create_access_token(shop_id: int):

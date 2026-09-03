@@ -1,8 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import SearchableSelect from '../../../components/SearchableSelect';
+import ToCsvButton from '../../../components/ToCsvButton';
+import ToExcelButton from '../../../components/ToExcelButton';
+import * as XLSX from 'xlsx';
+import { useAuth } from '../../../AuthContext';
 
-// Sample product and customer lists for autocomplete search
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
+// Sample product and customer lists for fallback
 const SAMPLE_PRODUCTS = [
   'ADENOSINE 6 MG',
   'AC NEW TABLET',
@@ -73,8 +79,10 @@ const getDateRangeForFilter = (filter) => {
 };
 
 export default function ProductWiseCustomerList() {
-  // Filter States - Default to top item in shop 477 to show DB data immediately
-  const [selectedItem, setSelectedItem] = useState({ id: 44991, name: '10ML NIPRO', label: '10ML NIPRO (ID: 44991)' });
+  const { token } = useAuth();
+
+  // Filter States
+  const [selectedItem, setSelectedItem] = useState(null);
   const [customerName, setCustomerName] = useState(null);
   const [dateFilter, setDateFilter] = useState('Custom Date');
   const [fromDate, setFromDate] = useState('');
@@ -94,8 +102,11 @@ export default function ProductWiseCustomerList() {
 
   // Search API functions for autocompletion
   const searchItems = async (term) => {
+    if (!token) return [];
     try {
-      const res = await fetch(`http://localhost:8000/api/sales/product-wise-customer/search-items?term=${encodeURIComponent(term)}&shop_id=477`);
+      const res = await fetch(`${API_BASE}/api/sales/product-wise-customer/search-items?term=${encodeURIComponent(term)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (res.ok) {
         return await res.json();
       }
@@ -106,8 +117,11 @@ export default function ProductWiseCustomerList() {
   };
 
   const searchPatients = async (term) => {
+    if (!token) return [];
     try {
-      const res = await fetch(`http://localhost:8000/api/sales/product-wise-customer/search-patients?term=${encodeURIComponent(term)}&shop_id=477`);
+      const res = await fetch(`${API_BASE}/api/sales/product-wise-customer/search-patients?term=${encodeURIComponent(term)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (res.ok) {
         return await res.json();
       }
@@ -126,15 +140,16 @@ export default function ProductWiseCustomerList() {
     }
   };
 
-  const fetchReportData = async (page = currentPage, size = recordsPerPage, sort = sortField, order = sortOrder, item = selectedItem, fromD = fromDate, toD = toDate, cust = customerName) => {
+  const fetchReportData = useCallback(async (page = currentPage, size = recordsPerPage, sort = sortField, order = sortOrder, item = selectedItem, fromD = fromDate, toD = toDate, cust = customerName) => {
+    if (!token) return;
     const itemId = typeof item === 'object' ? item?.id : item;
     setIsLoading(true);
     try {
       const patientSearch = typeof cust === 'object' ? cust?.name : cust;
+      const querySize = String(size).toLowerCase() === 'all' ? '10000' : String(size);
       const params = new URLSearchParams({
-        shop_id: '477',
         page: String(Math.max(0, page - 1)),
-        size: String(size),
+        size: querySize,
         sort_field: sort || 'created_at',
         sort_order: order || 'asc'
       });
@@ -143,27 +158,27 @@ export default function ProductWiseCustomerList() {
       if (toD) params.append('tdate', toD);
       if (patientSearch) params.append('customer_name', patientSearch);
 
-      const res = await fetch(`http://localhost:8000/api/sales/product-wise-customer/?${params.toString()}`);
+      const res = await fetch(`${API_BASE}/api/sales/product-wise-customer/?${params.toString()}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (res.ok) {
         const json = await res.json();
         setData(json.result || []);
         setTotalCount(json.count || 0);
         setTotalQuantity(json.totalqty || 0);
-        if (json.item_id && (!item || !item.id)) {
-          setSelectedItem({ id: json.item_id, label: `Product (ID: ${json.item_id})` });
-        }
       }
     } catch (err) {
       console.error('Error fetching report data:', err);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [token, currentPage, recordsPerPage, sortField, sortOrder, selectedItem, fromDate, toDate, customerName]);
 
-  // Automatically load data from DB on initial mount
+  // Load initial sales data dynamically on mount without pre-filling the product search box
   useEffect(() => {
-    fetchReportData(1, 10, '', 'desc', { id: 44991 }, '', '');
-  }, []);
+    if (!token) return;
+    fetchReportData(1, 10, '', 'desc', null, '', '');
+  }, [token]);
 
   const handleApplyFilters = () => {
     setCurrentPage(1);
@@ -243,38 +258,25 @@ export default function ProductWiseCustomerList() {
       alert('No data available to export');
       return;
     }
-    exportToCSV(); // Fallback CSV export
+    const exportData = data.map((item, index) => ({
+      'S.No': (currentPage - 1) * Number(recordsPerPage) + index + 1,
+      'Bill No': item.billNo || '',
+      'Date': item.date || '',
+      'Patient Name': item.customerName || '',
+      'Mobile': item.mobile || '',
+      'Qty': item.qty !== null && item.qty !== undefined ? item.qty : '',
+      'Batch': item.batch || '',
+      'Exp Date': item.expDate || ''
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Product Wise Patient List");
+    XLSX.writeFile(workbook, "Product_Wise_Patient_List.xlsx");
   };
 
-  const tabs = [
-    { label: 'ProductWise Customer', path: '/sales/product-wise-customer', active: true },
-    { label: 'Product Wise Unique Customer', path: '/sales/product-wise-unique-customer' },
-    { label: 'Customer Wise Product', path: '/sales/customer-wise-product' },
-  ];
-
   return (
-    <div className="px-[15px] pt-[15px] pb-0 bg-white min-h-full font-sans text-gray-800 antialiased">
-      {/* Tabs Row Container */}
-      <div className="mb-[20px]">
-        <ul className="flex flex-wrap m-0 p-0 list-none text-[12.96px] text-[#212529] font-sans border-b border-[#ddd]">
-          {tabs.map((tab, i) => (
-            <li key={i} className="mr-[2px] mb-[-1px]">
-              {tab.active ? (
-                <span className="inline-block px-[10px] py-[7.2px] text-[#555] bg-white border border-[#ddd] border-b-transparent rounded-t-[4px] cursor-default relative z-10">
-                  {tab.label}
-                </span>
-              ) : (
-                <Link 
-                  to={tab.path} 
-                  className="inline-block px-[10px] py-[7.2px] border border-transparent rounded-t-[4px] text-[#007BFF] hover:bg-transparent hover:text-[#212529] hover:border-[#ddd] relative hover:z-10 transition-colors"
-                >
-                  {tab.label}
-                </Link>
-              )}
-            </li>
-          ))}
-        </ul>
-      </div>
+    <div className="px-[15px] pt-[15px] pb-0 bg-white min-h-screen flex flex-col font-sans text-gray-800 antialiased">
 
       {/* Page Title */}
       <h3
@@ -645,6 +647,7 @@ export default function ProductWiseCustomerList() {
                 <option value="25">25</option>
                 <option value="50">50</option>
                 <option value="100">100</option>
+                <option value="All">All</option>
               </select>
               <div
                 className="pointer-events-none flex items-center justify-center"
@@ -679,7 +682,7 @@ export default function ProductWiseCustomerList() {
             >
               {/* First Page (<<) */}
               <button
-                disabled={currentPage === 1 || totalCount === 0}
+                disabled={currentPage === 1 || totalCount === 0 || recordsPerPage === 'All'}
                 onClick={() => handlePageChange(1)}
                 className="hover:bg-[#7b8894] disabled:opacity-85 flex items-center justify-center transition-colors h-full"
                 style={{
@@ -700,7 +703,7 @@ export default function ProductWiseCustomerList() {
               <div style={{ width: '1px', height: '14px', backgroundColor: '#6c7985' }}></div>
               {/* Prev Page (<) */}
               <button
-                disabled={currentPage === 1 || totalCount === 0}
+                disabled={currentPage === 1 || totalCount === 0 || recordsPerPage === 'All'}
                 onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
                 className="hover:bg-[#7b8894] disabled:opacity-85 flex items-center justify-center transition-colors h-full"
                 style={{
@@ -733,7 +736,9 @@ export default function ProductWiseCustomerList() {
               margin: 0,
             }}
           >
-            {totalCount === 0 ? '0 to 0 (0)' : `${(currentPage - 1) * Number(recordsPerPage) + 1} to ${Math.min(currentPage * Number(recordsPerPage), totalCount)} (${totalCount})`}
+            {recordsPerPage === 'All'
+              ? (totalCount === 0 ? '0 to 0 (0)' : `1 to ${totalCount} (${totalCount})`)
+              : (totalCount === 0 ? '0 to 0 (0)' : `${(currentPage - 1) * Number(recordsPerPage) + 1} to ${Math.min(currentPage * Number(recordsPerPage), totalCount)} (${totalCount})`)}
           </span>
 
           {/* Right Arrow Pair */}
@@ -751,7 +756,7 @@ export default function ProductWiseCustomerList() {
             >
               {/* Next Page (>) */}
               <button
-                disabled={totalCount === 0 || currentPage * Number(recordsPerPage) >= totalCount}
+                disabled={totalCount === 0 || recordsPerPage === 'All' || currentPage * Number(recordsPerPage) >= totalCount}
                 onClick={() => handlePageChange(currentPage + 1)}
                 className="hover:bg-[#7b8894] disabled:opacity-85 flex items-center justify-center transition-colors h-full"
                 style={{
@@ -772,7 +777,7 @@ export default function ProductWiseCustomerList() {
               <div style={{ width: '1px', height: '14px', backgroundColor: '#6c7985' }}></div>
               {/* Last Page (>>) */}
               <button
-                disabled={totalCount === 0 || currentPage * Number(recordsPerPage) >= totalCount}
+                disabled={totalCount === 0 || recordsPerPage === 'All' || currentPage * Number(recordsPerPage) >= totalCount}
                 onClick={() => handlePageChange(Math.ceil(totalCount / Number(recordsPerPage)) || 1)}
                 className="hover:bg-[#7b8894] disabled:opacity-85 flex items-center justify-center transition-colors h-full"
                 style={{
@@ -793,54 +798,10 @@ export default function ProductWiseCustomerList() {
           </div>
 
           {/* Export to CSV */}
-          <button
-            id="csv"
-            className="btn btn-info btn-sm font-bold uppercase tracking-wide transition-colors shrink-0"
-            onClick={exportToCSV}
-            style={{
-              color: '#FFFFFF',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-              fontSize: '12.6px',
-              backgroundColor: '#17A2B8',
-              margin: '0px 0px 0px 16px',
-              padding: '3.6px 7.2px',
-              height: '27.7px',
-              borderRadius: '4px',
-              border: '1px solid transparent',
-              cursor: 'pointer',
-              outline: 'none',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            TO CSV
-          </button>
+          <ToCsvButton className="ml-[16px]" onClick={exportToCSV} />
 
           {/* Export to Excel */}
-          <button
-            id="excel"
-            className="btn btn-warning btn-sm font-bold uppercase tracking-wide transition-colors shrink-0"
-            onClick={exportToExcel}
-            style={{
-              color: '#212529',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-              fontSize: '12.6px',
-              backgroundColor: '#FFC107',
-              margin: '0px 0px 0px 8px',
-              padding: '3.6px 7.2px',
-              height: '27.7px',
-              borderRadius: '4px',
-              border: '1px solid transparent',
-              cursor: 'pointer',
-              outline: 'none',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            TO EXCEL
-          </button>
+          <ToExcelButton className="ml-[8px]" onClick={exportToExcel} />
         </div>
 
         {/* Main Data Table */}
@@ -1074,7 +1035,7 @@ export default function ProductWiseCustomerList() {
               data.map((row, index) => (
                 <tr key={index} className="border-b border-[#dee2e6] hover:bg-gray-50">
                   <td className="py-2.5 px-3 text-center text-gray-600 border-r border-[#dee2e6]">
-                    {(currentPage - 1) * Number(recordsPerPage) + index + 1}
+                    {recordsPerPage === 'All' ? index + 1 : (currentPage - 1) * Number(recordsPerPage) + index + 1}
                   </td>
                   <td className="py-2.5 px-3 text-gray-700 font-medium border-r border-[#dee2e6]">{row.billNo}</td>
                   <td className="py-2.5 px-3 text-gray-600 border-r border-[#dee2e6]">{row.date}</td>
@@ -1104,10 +1065,10 @@ export default function ProductWiseCustomerList() {
       </div>
       </div>
 
-      {/* Footer */}
-      <div className="w-full text-center py-6 mt-4 text-[12px] text-[#6c757d] select-none font-sans">
+      {/* Footer pinned to bottom with small subtle font */}
+      <footer className="w-full text-center mt-auto pt-10 pb-4 text-[10.8px] text-[#6c757d] select-none font-sans">
         Copyright &copy; NIGSOFT Private Ltd
-      </div>
+      </footer>
     </div>
   );
 }
