@@ -2,6 +2,7 @@ import uvicorn
 from fastapi import FastAPI
 from app.api.purchase import router as purchase_router
 from app.api.stocks.router import router as stocks_router
+from app.api.sales.router import router as sales_router
 from app.api.auth_router import router as auth_api_router
 
 from contextlib import asynccontextmanager
@@ -29,6 +30,7 @@ app.add_middleware(
 app.include_router(auth_api_router, prefix='/api/auth', tags=['Authentication'])
 app.include_router(purchase_router.router, prefix='/api/purchase', tags=['Purchase'])
 app.include_router(stocks_router, prefix='/api/stocks')
+app.include_router(sales_router, prefix='/api/sales')
 
 @app.get('/')
 def read_root():

@@ -2,8 +2,11 @@ import aiomysql
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from the .env file in the backend root
-load_dotenv()
+dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+if os.path.exists(dotenv_path):
+    load_dotenv(dotenv_path)
+else:
+    load_dotenv()
 
 db_pool = None
 
@@ -14,7 +17,7 @@ async def init_db():
         port=int(os.getenv("DB_PORT", 3306)),
         user=os.getenv("DB_USER", "root"),
         password=os.getenv("DB_PASSWORD", ""),
-        db=os.getenv("DB_NAME", "medi"),
+        db=os.getenv("DB_NAME", "main_medi"),
         autocommit=True,
         cursorclass=aiomysql.DictCursor
     )

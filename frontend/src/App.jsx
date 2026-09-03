@@ -4,7 +4,11 @@ import ProductSummaryPage from './features/stocks/products_summary/ProductSummar
 import ProductSummaryDetailsPage from './features/stocks/products_summary/ProductSummaryDetailsPage';
 import StockReportBatchWisePage from './features/stocks/stock_report_batch_wise/StockReportBatchWisePage';
 import ZeroStocksPage from './features/stocks/zero_stocks/ZeroStocksPage';
+
 import ProductWiseCustomerList from './features/sales/product_wise_customer/ProductWiseCustomerList';
+import ProductWiseUniqueCustomerList from './features/sales/product_wise_unique_customer/ProductWiseUniqueCustomerList';
+import CustomerWiseProductList from './features/sales/customer_wise_product/CustomerWiseProductList';
+
 import AuthHandler from './features/auth/AuthHandler';
 import { AuthProvider } from './AuthContext';
 
@@ -32,8 +36,19 @@ export default function App() {
               <Route path="/stocks/stock-report-batch-wise" element={<StockReportBatchWisePage />} />
               <Route path="/stocks/zero-stocks" element={<ZeroStocksPage />} />
 
+              {/* Stocks Direct Alias Routes */}
+              <Route path="/stock-report-batch-wise" element={<StockReportBatchWisePage />} />
+              <Route path="/zero-stocks" element={<ZeroStocksPage />} />
+
               {/* Sales Module */}
               <Route path="/sales/product-wise-customer" element={<ProductWiseCustomerList />} />
+              <Route path="/sales/product-wise-unique-customer" element={<ProductWiseUniqueCustomerList />} />
+              <Route path="/sales/customer-wise-product" element={<CustomerWiseProductList />} />
+
+              {/* Sales Direct Alias Routes */}
+              <Route path="/product-wise-customer" element={<ProductWiseCustomerList />} />
+              <Route path="/product-wise-unique-customer" element={<ProductWiseUniqueCustomerList />} />
+              <Route path="/customer-wise-product" element={<CustomerWiseProductList />} />
 
               {/* Reports Module */}
               <Route path="/reports/op_ip_report" element={<div className="p-4">OP IP Report Component (Coming Soon)</div>} />
