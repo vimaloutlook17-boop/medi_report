@@ -5,35 +5,9 @@ import ToCsvButton from '../../../components/ToCsvButton';
 import ToExcelButton from '../../../components/ToExcelButton';
 import * as XLSX from 'xlsx';
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
+const API_BASE = '';
 
-// Sample product and patient lists for autocomplete search
-const SAMPLE_PRODUCTS = [
-  'ADENOSINE 6 MG',
-  'AC NEW TABLET',
-  'ULTAVIR 30ML',
-  'ADRENALLINE 1ML',
-  'RANTAC 150MG',
-  'ANOZEST CREAM',
-  'AZITHROMYCIN 500MG',
-  'PARACETAMOL 650MG',
-  'AMOXICILLIN 500MG',
-  'CETIRIZINE 10MG',
-  'DOLO 650MG',
-  'PAN 40MG'
-];
-
-const SAMPLE_PATIENTS = [
-  'John Doe',
-  'Jane Smith',
-  'Robert Brown',
-  'Michael Johnson',
-  'David Wilson',
-  'Sarah Davis',
-  'Ramesh Kumar',
-  'Suresh Patel',
-  'Priya Sharma'
-];
+import { useAuth } from '../../../AuthContext';
 
 // Helper to format date as YYYY-MM-DD for HTML5 date inputs
 const formatDate = (d) => {
@@ -84,6 +58,38 @@ export default function ProductWiseUniqueCustomerList() {
   const [dateFilter, setDateFilter] = useState('Today');
   const [fromDate, setFromDate] = useState(() => formatDate(new Date()));
   const [toDate, setToDate] = useState(() => formatDate(new Date()));
+
+  const { token } = useAuth();
+
+  const searchItems = async (term) => {
+    if (!token) return [];
+    try {
+      const res = await fetch(`${API_BASE}/api/sales/product-wise-customer/search-items?term=${encodeURIComponent(term)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (err) {
+      console.error('Error fetching items:', err);
+    }
+    return [];
+  };
+
+  const searchPatients = async (term) => {
+    if (!token) return [];
+    try {
+      const res = await fetch(`${API_BASE}/api/sales/product-wise-customer/search-patients?term=${encodeURIComponent(term)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (err) {
+      console.error('Error fetching patients:', err);
+    }
+    return [];
+  };
 
   // Pagination & Table States
   const [recordsPerPage, setRecordsPerPage] = useState('10');
@@ -256,7 +262,7 @@ export default function ProductWiseUniqueCustomerList() {
               placeholder="Type to search product..."
               minChars={2}
               minCharsMessage="Please enter 2 or more characters"
-              options={SAMPLE_PRODUCTS}
+              onSearch={searchItems}
             />
           </div>
 
@@ -270,7 +276,7 @@ export default function ProductWiseUniqueCustomerList() {
               placeholder="Type to search patient..."
               minChars={3}
               minCharsMessage="Please enter 3 or more characters"
-              options={SAMPLE_PATIENTS}
+              onSearch={searchPatients}
             />
           </div>
 

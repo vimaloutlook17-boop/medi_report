@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 
+import { useAuth } from '../../../AuthContext';
+
 export default function OpIpReportPage() {
+  const { token } = useAuth();
   const [dateFilter, setDateFilter] = useState('Today');
   const [visitType, setVisitType] = useState('ALL');
 
   return (
     <div id="layoutSidenav_content" className="ml-[-216px] pl-[216px] text-[#212529] font-sans text-[12.96px] bg-white min-h-screen">
-      <div className="px-[14.4px]">
+      <div className="px-[14.4px] pt-[15px]">
+
         {/* Header */}
         <h3 className="text-[25.2px] font-medium text-[#323F52] mb-[24px] pt-[14.4px] uppercase">
           OP/IP WISE BILL LIST

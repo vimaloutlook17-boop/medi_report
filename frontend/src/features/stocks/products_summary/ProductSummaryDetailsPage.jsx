@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import ToExcelButton from '../../../components/ToExcelButton';
+import PaginationControls from '../../../components/PaginationControls';
 import { useAuth } from '../../../AuthContext';
 
 export default function ProductSummaryDetailsPage() {
@@ -36,11 +37,9 @@ export default function ProductSummaryDetailsPage() {
   }, [id, dateFilter, page, size, token]);
 
   const totalPages = Math.ceil(totalCount / size);
-  const startRecord = totalCount === 0 ? 0 : (page * size) + 1;
-  const endRecord = Math.min((page + 1) * size, totalCount);
 
   return (
-    <div className="px-[15px] pt-[15px] pb-0 bg-white min-h-full">
+    <div className="px-[15px] pt-[15px] pb-0 bg-white min-h-full flex flex-col">
       <style>{`
         .select2-custom-scrollbar::-webkit-scrollbar { width: 14px; }
         .select2-custom-scrollbar::-webkit-scrollbar-track { background: #f8f9fa; border-left: 1px solid #e5e5e5; }
@@ -51,31 +50,14 @@ export default function ProductSummaryDetailsPage() {
       {/* Title */}
       <h3 className="text-[25.2px] text-[#323F52] font-medium mt-[15px] mb-[28px]">PRODUCT SUMMARY</h3>
 
-      {/* Top Filter Row */}
-      <div className="flex flex-wrap mx-[-15px] px-[5px] pb-[14.4px]">
-        {/* Date Filter Dropdown */}
-        <div className="flex items-center w-1/4 p-[7.2px]">
-          <select 
-            value={dateFilter}
-            onChange={(e) => { setDateFilter(e.target.value); setPage(0); }}
-            className="w-full border border-[#ced4da] rounded-[3px] px-[10.8px] py-[4px] h-[34px] text-[12.96px] text-[#495057] bg-white outline-none cursor-pointer"
-          >
-            <option value="Today">Today</option>
-            <option value="Yesterday">Yesterday</option>
-            <option value="Last_7">Last 7 Days</option>
-            <option value="current_month">Current Month</option>
-            <option value="Last_month">Last Month</option>
-          </select>
-        </div>
-      </div>
 
       {/* Info Row */}
-      <div className="flex items-center text-[12.96px] font-sans text-[#212529] mb-[20px] px-[5px]">
+      <div className="flex items-center text-[12.96px] text-[#212529] mb-[20px] px-[5px]" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
         <div className="mr-[50px]">
-          Product Name : <span className="font-bold">{productName}</span>
+          Product Name : <b>{productName}</b>
         </div>
         <div>
-          Available Stock : <span className="font-bold">{availableStock}</span>
+          Available Stock : <b>{availableStock}</b>
         </div>
       </div>
 
@@ -83,7 +65,7 @@ export default function ProductSummaryDetailsPage() {
       <div className="flex flex-wrap items-center justify-start mb-[15px] text-[13px]">
         {/* Records Per Page */}
         <div className="flex items-center">
-          <h6 className="text-[#323F52] text-[15.84px] font-medium m-0 mr-[7.2px] mb-[7.2px]">Records Per Page</h6>
+          <h6 className="text-[#323F52] text-[15.84px] ml-0" style={{ margin: '0px 0px 7.2px 0px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>Records Per Page</h6>
           <select 
             value={size}
             onChange={(e) => { setSize(Number(e.target.value)); setPage(0); }}
@@ -101,59 +83,8 @@ export default function ProductSummaryDetailsPage() {
         </div>
 
         {/* Pagination Controls */}
-        <div className="flex items-center">
-          <div className="flex items-center ml-[80px]">
-            <button 
-              onClick={() => setPage(0)} disabled={page === 0}
-              className="bg-[#6C757D] disabled:opacity-50 text-white w-[28.98px] h-[28.09px] py-[3.6px] px-[7.2px] rounded-l-[3px] hover:bg-[#5c636a] flex items-center justify-center"
-            >
-              «
-            </button>
-            <button 
-              onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
-              className="bg-[#6C757D] disabled:opacity-50 text-white w-[22.69px] h-[28.09px] py-[3.6px] px-[7.2px] border-l border-r border-[#6c757d] hover:bg-[#5c636a] flex items-center justify-center"
-            >
-              ‹
-            </button>
-          </div>
-          
-          <span className="px-[5px] font-bold text-[#212529] text-[12.96px]">
-            {startRecord} to {endRecord} ({totalCount})
-          </span>
-          
-          <div className="flex items-center">
-            <button 
-              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1 || totalPages === 0}
-              className="bg-[#6C757D] disabled:opacity-50 text-white w-[22.69px] h-[28.09px] py-[3.6px] px-[7.2px] border-l border-r border-[#6c757d] hover:bg-[#5c636a] flex items-center justify-center"
-            >
-              ›
-            </button>
-            <button 
-              onClick={() => setPage(totalPages - 1)} disabled={page >= totalPages - 1 || totalPages === 0}
-              className="bg-[#6C757D] disabled:opacity-50 text-white w-[28.98px] h-[28.09px] py-[3.6px] px-[7.2px] rounded-r-[3px] hover:bg-[#5c636a] flex items-center justify-center"
-            >
-              »
-            </button>
-          </div>
-        </div>
-        
-        {/* Page Selector */}
-        <div className="flex items-center">
-          <h5 className="text-[#323F52] text-[18px] font-medium m-0 ml-[80px] mb-[7.2px] mr-[3.6px]">PAGE</h5>
-          <select 
-            value={page}
-            onChange={(e) => setPage(Number(e.target.value))}
-            className="appearance-none py-[5.4px] pr-[25.2px] pl-[10.8px] text-[14.4px] text-[#495057] bg-white border border-[#ced4da] rounded-[3.2px] h-[34.4px] outline-none cursor-pointer bg-no-repeat"
-            style={{ 
-              backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 5'%3e%3cpath fill='%23343a40' d='M2 0L0 2h4zm0 5L0 3h4z'/%3e%3c/svg%3e")`,
-              backgroundPosition: 'right 10px center',
-              backgroundSize: '8px 10px'
-            }}
-          >
-            {Array.from({ length: totalPages || 1 }, (_, i) => (
-              <option key={i} value={i}>{i + 1}</option>
-            ))}
-          </select>
+        <div className="flex items-center ml-[70px]">
+          <PaginationControls page={page} setPage={setPage} size={size} totalCount={totalCount} />
         </div>
 
         {/* Excel Button */}
@@ -165,13 +96,13 @@ export default function ProductSummaryDetailsPage() {
         <table className="w-full text-left border-collapse border border-[#dee2e6]">
           <thead>
             <tr className="bg-[#EEEEEE] border-b-[2px] border-[#dee2e6]">
-              <th className="p-[8px] font-bold text-[#212529] text-[12.96px] font-['Arial',sans-serif]">Date</th>
-              <th className="p-[8px] font-bold text-[#212529] text-[12.96px] font-['Arial',sans-serif]">Type</th>
-              <th className="p-[8px] font-bold text-[#212529] text-[12.96px] font-['Arial',sans-serif]">Purchase Qty</th>
-              <th className="p-[8px] font-bold text-[#212529] text-[12.96px] font-['Arial',sans-serif]">Sale Qty</th>
-              <th className="p-[8px] font-bold text-[#212529] text-[12.96px] font-['Arial',sans-serif]">Purchase Return Qty</th>
-              <th className="p-[8px] font-bold text-[#212529] text-[12.96px] font-['Arial',sans-serif]">Sale Return Qty</th>
-              <th className="p-[8px] font-bold text-[#212529] text-[12.96px] font-['Arial',sans-serif]">Created / Updated</th>
+              <th className="font-bold text-[#212529] text-[12.96px]" style={{ padding: '4px', fontFamily: 'Arial, sans-serif' }}>Date</th>
+              <th className="font-bold text-[#212529] text-[12.96px]" style={{ padding: '4px', fontFamily: 'Arial, sans-serif' }}>Type</th>
+              <th className="font-bold text-[#212529] text-[12.96px]" style={{ padding: '4px', fontFamily: 'Arial, sans-serif' }}>Purchase Qty</th>
+              <th className="font-bold text-[#212529] text-[12.96px]" style={{ padding: '4px', fontFamily: 'Arial, sans-serif' }}>Sale Qty</th>
+              <th className="font-bold text-[#212529] text-[12.96px]" style={{ padding: '4px', fontFamily: 'Arial, sans-serif' }}>Purchase Return Qty</th>
+              <th className="font-bold text-[#212529] text-[12.96px]" style={{ padding: '4px', fontFamily: 'Arial, sans-serif' }}>Sale Return Qty</th>
+              <th className="font-bold text-[#212529] text-[12.96px]" style={{ padding: '4px', fontFamily: 'Arial, sans-serif' }}>Created / Updated</th>
             </tr>
           </thead>
           <tbody>
@@ -184,7 +115,7 @@ export default function ProductSummaryDetailsPage() {
                 {/* Stock Quantity Before (Opening Balance) Row */}
                 <tr className="bg-[#C0C0C0] border-t border-[#dee2e6]">
                   <td colSpan="7" className="p-[10.8px] text-center text-[#212529] text-[12.96px]">
-                    Stock Quantity Bf : {openingBalance}
+                    Stock Quantity Bf : {transactions.length === 0 ? availableStock : openingBalance}
                   </td>
                 </tr>
 
@@ -225,12 +156,10 @@ export default function ProductSummaryDetailsPage() {
         </table>
       </div>
       
-      {/* Footer */}
-      <div className="w-full px-[15px] mt-[40px] text-[#A2ACBA] font-sans">
-        <div className="w-full text-center px-[15px] text-[10.368px]">
-          Copyright Ac NIGSOFT Private Ltd
-        </div>
-      </div>
+      {/* Footer pinned to bottom with small subtle font */}
+      <footer className="w-full text-center mt-auto pt-10 pb-4 text-[10.8px] text-[#6c757d] select-none font-sans">
+        Copyright &copy; NIGSOFT Private Ltd
+      </footer>
     </div>
   );
 }
