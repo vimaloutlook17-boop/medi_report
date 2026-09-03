@@ -151,20 +151,18 @@ export default function SearchableSelect({
         </label>
       )}
 
-      {/* Main Select Button / Display Box */}
       <div
-        id={id}
         tabIndex={0}
         onClick={() => setIsOpen(!isOpen)}
         onKeyDown={handleKeyDown}
-        className={`flex items-center justify-between bg-white border border-[#ced4da] px-[10.8px] h-[35px] text-[14.4px] cursor-pointer select-none outline-none focus:border-[#80bdff] ${
+        className={`flex items-center justify-between bg-white border border-[#ced4da] h-[35px] text-[14.4px] cursor-pointer select-none outline-none focus:border-[#80bdff] ${
           isOpen ? 'rounded-t-[4px] border-b-[#ced4da]' : 'rounded-[4px]'
         }`}
       >
-        <span className={`truncate text-[13.5px] ${!value ? 'text-[#6c757d]' : 'text-[#212529]'}`}>
+        <span id={id} className={`truncate text-[13.5px] pl-[8px] pr-[20px] ${!value ? 'text-[#6c757d]' : 'text-[#212529]'}`}>
           {getDisplayValue() || placeholder}
         </span>
-        <span className="ml-2 text-[#6c757d] text-[8px] pointer-events-none">
+        <span className="ml-2 pr-[8px] text-[#6c757d] text-[8px] pointer-events-none">
           {isOpen ? '▲' : '▼'}
         </span>
       </div>

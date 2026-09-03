@@ -1,9 +1,13 @@
 import uvicorn
+import os
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from app.api.purchase import router as purchase_router
 from app.api.stocks.router import router as stocks_router
 from app.api.sales.router import router as sales_router
 from app.api.auth_router import router as auth_api_router
+from app.api.reports.router import router as reports_router
 
 from contextlib import asynccontextmanager
 from app.database import init_db, close_db
@@ -31,16 +35,41 @@ app.include_router(auth_api_router, prefix='/api/auth', tags=['Authentication'])
 app.include_router(purchase_router.router, prefix='/api/purchase', tags=['Purchase'])
 app.include_router(stocks_router, prefix='/api/stocks')
 app.include_router(sales_router, prefix='/api/sales')
+app.include_router(reports_router, prefix='/api/reports')
 
-@app.get('/')
+@app.get('/api')
 def read_root():
     return {'message': 'Welcome to Medi API (Python Backend)'}
+
+# Mount the static files from the frontend build directory
+# We assume the frontend is built into the 'frontend/dist' directory at the same level as 'backend'
+frontend_dist = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'frontend', 'dist')
+
+if os.path.isdir(frontend_dist):
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
+
+    @app.get("/{catchall:path}")
+    def serve_react_app(catchall: str):
+        # Serve index.html for any unmatched route to support SPA navigation
+        # But ensure we don't accidentally intercept actual API calls (handled by order/prefixes)
+        if catchall.startswith("api/"):
+            return {"detail": "Not Found"}
+        index_path = os.path.join(frontend_dist, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+        return {"detail": "Frontend build not found. Please run 'npm run build' in the frontend directory."}
+else:
+    @app.get("/{catchall:path}")
+    def missing_frontend(catchall: str):
+        if catchall.startswith("api/"):
+            return {"detail": "Not Found"}
+        return {"detail": f"Frontend build directory not found at {frontend_dist}. Please run 'npm run build'."}
 
 
 if __name__ == '__main__':
     import os
     from dotenv import load_dotenv
-    dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+    dotenv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
     if os.path.exists(dotenv_path):
         load_dotenv(dotenv_path)
     host = os.getenv('HOST', os.getenv('BACKEND_HOST', '0.0.0.0'))

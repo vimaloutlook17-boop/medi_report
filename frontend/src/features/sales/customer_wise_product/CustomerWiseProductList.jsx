@@ -5,35 +5,9 @@ import ToCsvButton from '../../../components/ToCsvButton';
 import ToExcelButton from '../../../components/ToExcelButton';
 import * as XLSX from 'xlsx';
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
+const API_BASE = '';
 
-// Sample product options for autocomplete
-const SAMPLE_PRODUCTS = [
-  'Paracetamol 500mg',
-  'Amoxicillin 250mg',
-  'Cetirizine 10mg',
-  'Pantoprazole 40mg',
-  'Azithromycin 500mg',
-  'Metformin 500mg',
-  'Atorvastatin 10mg',
-  'Ibuprofen 400mg',
-  'Omeprazole 20mg',
-  'Dolo 650mg',
-];
-
-// Sample patient options for autocomplete
-const SAMPLE_PATIENTS = [
-  'John Doe (UHID: P1001)',
-  'Jane Smith (UHID: P1002)',
-  'Robert Johnson (UHID: P1003)',
-  'Michael Brown (UHID: P1004)',
-  'Emily Davis (UHID: P1005)',
-  'David Wilson (UHID: P1006)',
-  'Sarah Taylor (UHID: P1007)',
-  'James Anderson (UHID: P1008)',
-  'Patricia Thomas (UHID: P1009)',
-  'Christopher Jackson (UHID: P1010)',
-];
+import { useAuth } from '../../../AuthContext';
 
 export default function CustomerWiseProductList() {
   const [selectedItem, setSelectedItem] = useState('');
@@ -41,6 +15,38 @@ export default function CustomerWiseProductList() {
   const [dateFilter, setDateFilter] = useState('Today');
   const [fromDate, setFromDate] = useState('2026-09-01');
   const [toDate, setToDate] = useState('2026-09-01');
+
+  const { token } = useAuth();
+
+  const searchItems = async (term) => {
+    if (!token) return [];
+    try {
+      const res = await fetch(`${API_BASE}/api/sales/product-wise-customer/search-items?term=${encodeURIComponent(term)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (err) {
+      console.error('Error fetching items:', err);
+    }
+    return [];
+  };
+
+  const searchPatients = async (term) => {
+    if (!token) return [];
+    try {
+      const res = await fetch(`${API_BASE}/api/sales/product-wise-customer/search-patients?term=${encodeURIComponent(term)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (err) {
+      console.error('Error fetching patients:', err);
+    }
+    return [];
+  };
 
   // Filter application state
   const [appliedFilters, setAppliedFilters] = useState({
@@ -242,7 +248,7 @@ export default function CustomerWiseProductList() {
               placeholder="Type to search product..."
               minChars={2}
               minCharsMessage="Please enter 2 or more characters"
-              options={SAMPLE_PRODUCTS}
+              onSearch={searchItems}
             />
           </div>
 
@@ -256,7 +262,7 @@ export default function CustomerWiseProductList() {
               placeholder="Type to search patient..."
               minChars={3}
               minCharsMessage="Please enter 3 or more characters"
-              options={SAMPLE_PATIENTS}
+              onSearch={searchPatients}
             />
           </div>
 

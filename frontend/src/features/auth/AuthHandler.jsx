@@ -16,11 +16,14 @@ export default function AuthHandler() {
       setAuthToken(token);
 
       // Determine where to redirect based on the module
+      const cleanModule = (module || '').trim().toLowerCase();
       let redirectPath = '/';
-      if (module === 'stocks') {
+      if (cleanModule === 'stocks') {
         redirectPath = '/stocks/product-summary';
-      } else if (module === 'sales') {
+      } else if (cleanModule === 'sales') {
         redirectPath = '/sales/product-wise-customer';
+      } else if (cleanModule === 'reports') {
+        redirectPath = '/reports/collection_report';
       }
       
       // Navigate to the clean URL, replacing history so the user can't press "Back" to see the token

@@ -1,40 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import PaginationControls from '../../../components/PaginationControls';
+import { ApplyFilterButton, ResetButton } from '../../../components/FilterButtons';
 import SearchableSelect from '../../../components/SearchableSelect';
 import ToCsvButton from '../../../components/ToCsvButton';
 import ToExcelButton from '../../../components/ToExcelButton';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../../AuthContext';
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
 
-// Sample product and customer lists for fallback
-const SAMPLE_PRODUCTS = [
-  'ADENOSINE 6 MG',
-  'AC NEW TABLET',
-  'ULTAVIR 30ML',
-  'ADRENALLINE 1ML',
-  'RANTAC 150MG',
-  'ANOZEST CREAM',
-  'AZITHROMYCIN 500MG',
-  'PARACETAMOL 650MG',
-  'AMOXICILLIN 500MG',
-  'CETIRIZINE 10MG',
-  'DOLO 650MG',
-  'PAN 40MG'
-];
+const API_BASE = '';
 
-const SAMPLE_CUSTOMERS = [
-  'John Doe',
-  'Jane Smith',
-  'Robert Brown',
-  'Michael Johnson',
-  'David Wilson',
-  'Sarah Davis',
-  'Ramesh Kumar',
-  'Suresh Patel',
-  'Priya Sharma'
-];
+
 
 // Helper to format date as YYYY-MM-DD for HTML5 date inputs
 const formatDate = (d) => {
@@ -277,6 +253,8 @@ export default function ProductWiseCustomerList() {
 
   return (
     <div className="px-[15px] pt-[15px] pb-0 bg-white min-h-screen flex flex-col font-sans text-gray-800 antialiased">
+      
+
 
       {/* Page Title */}
       <h3
@@ -315,9 +293,9 @@ export default function ProductWiseCustomerList() {
             alignItems: 'center',
             gap: '6px',
             color: '#212529',
-            fontSize: '12.96px',
+            fontSize: '14px',
             lineHeight: '19.44px',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+            fontFamily: 'Arial, sans-serif',
             margin: '0px 0px 8px 0px',
             fontWeight: '600',
           }}
@@ -338,7 +316,7 @@ export default function ProductWiseCustomerList() {
           }}
         >
           {/* Select Item */}
-          <div className="flex-1 min-w-[180px]">
+          <div className="shrink-0" style={{ flex: 1, minWidth: '200px' }}>
             <SearchableSelect
               id="select2-item_value-container"
               label="Select Item"
@@ -352,7 +330,7 @@ export default function ProductWiseCustomerList() {
           </div>
 
           {/* Patient Name */}
-          <div className="flex-1 min-w-[180px]">
+          <div className="shrink-0" style={{ flex: 1, minWidth: '200px' }}>
             <SearchableSelect
               id="select2-search_customer_name-container"
               label="Patient Name"
@@ -366,7 +344,7 @@ export default function ProductWiseCustomerList() {
           </div>
 
           {/* Date Filter */}
-          <div className="w-[140px] shrink-0">
+          <div className="shrink-0" style={{ width: '198px' }}>
             <label
               htmlFor="selector"
               style={{
@@ -391,7 +369,7 @@ export default function ProductWiseCustomerList() {
                   fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
                   fontSize: '14.4px',
                   backgroundColor: '#FFFFFF',
-                  padding: '4px 24px 4px 10.8px',
+                  padding: '4px 6px',
                   height: '35px',
                   border: '1px solid #ced4da',
                   borderRadius: '4px',
@@ -517,55 +495,10 @@ export default function ProductWiseCustomerList() {
           </div>
 
           {/* Apply Filters Button */}
-          <button
-            id="applyFilterBtn"
-            className="btn btn-primary shrink-0 flex items-center justify-center gap-1.5 font-normal"
-            onClick={handleApplyFilters}
-            style={{
-              color: '#FFFFFF',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-              fontSize: '14.4px',
-              backgroundColor: '#007BFF',
-              padding: '4px 10.8px',
-              height: '35px',
-              border: '1px solid transparent',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              outline: 'none',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <svg className="w-3.5 h-3.5 fill-white" viewBox="0 0 24 24">
-              <path d="M2.5 4C2.5 3.44772 2.94772 3 3.5 3H20.5C21.0523 3 21.5 3.44772 21.5 4C21.5 4.30472 21.3638 4.5936 21.1287 4.7876L14.5 10.25V18.25C14.5 18.5724 14.3444 18.8724 14.0799 19.0601L10.5799 21.5601C10.0984 21.904 9.5 21.5594 9.5 20.9702V10.25L2.87132 4.7876C2.63616 4.5936 2.5 4.30472 2.5 4Z" />
-            </svg>
-            <span>Apply Filters</span>
-          </button>
+          <ApplyFilterButton onClick={handleApplyFilters} />
 
           {/* Reset Button */}
-          <button
-            id="clearFilterBtn"
-            className="btn btn-secondary shrink-0 flex items-center justify-center gap-1.5 font-normal"
-            onClick={handleReset}
-            style={{
-              color: '#FFFFFF',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-              fontSize: '14.4px',
-              backgroundColor: '#6C757D',
-              padding: '4px 10.8px',
-              height: '35px',
-              border: '1px solid transparent',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              outline: 'none',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-              <path d="M3 3v5h5" />
-            </svg>
-            <span>Reset</span>
-          </button>
+          <ResetButton onClick={handleReset} />
         </div>
       </div>
 
@@ -666,136 +599,12 @@ export default function ProductWiseCustomerList() {
             </div>
           </div>
 
-          {/* Left Arrow Pair */}
-          <div
-            className="flex items-center shrink-0"
-            style={{ marginLeft: '30px' }}
-          >
-            <div
-              className="flex items-center rounded overflow-hidden shadow-xs"
-              style={{
-                width: '49.89px',
-                height: '27.7px',
-                backgroundColor: '#8d9aa6',
-                borderRadius: '4px',
-              }}
-            >
-              {/* First Page (<<) */}
-              <button
-                disabled={currentPage === 1 || totalCount === 0 || recordsPerPage === 'All'}
-                onClick={() => handlePageChange(1)}
-                className="hover:bg-[#7b8894] disabled:opacity-85 flex items-center justify-center transition-colors h-full"
-                style={{
-                  width: '24.44px',
-                  height: '27.7px',
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  padding: 0,
-                }}
-                title="First Page"
-              >
-                <svg width="11" height="11" viewBox="0 0 11 11" fill="white">
-                  <path d="M5.5 1L0.5 5.5L5.5 10V1ZM10.5 1L5.5 5.5L10.5 10V1Z" />
-                </svg>
-              </button>
-              {/* Divider */}
-              <div style={{ width: '1px', height: '14px', backgroundColor: '#6c7985' }}></div>
-              {/* Prev Page (<) */}
-              <button
-                disabled={currentPage === 1 || totalCount === 0 || recordsPerPage === 'All'}
-                onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                className="hover:bg-[#7b8894] disabled:opacity-85 flex items-center justify-center transition-colors h-full"
-                style={{
-                  width: '24.44px',
-                  height: '27.7px',
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  padding: 0,
-                }}
-                title="Previous Page"
-              >
-                <svg width="6" height="11" viewBox="0 0 6 11" fill="white">
-                  <path d="M5.5 1L0.5 5.5L5.5 10V1Z" />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          {/* Page Status */}
-          <span
-            id="get_items5_pager_info"
-            className="pagedisplay select-none font-bold shrink-0 flex items-center"
-            style={{
-              color: '#212529',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-              fontSize: '12.96px',
-              padding: '0px 10px',
-              whiteSpace: 'nowrap',
-              margin: 0,
-            }}
-          >
-            {recordsPerPage === 'All'
-              ? (totalCount === 0 ? '0 to 0 (0)' : `1 to ${totalCount} (${totalCount})`)
-              : (totalCount === 0 ? '0 to 0 (0)' : `${(currentPage - 1) * Number(recordsPerPage) + 1} to ${Math.min(currentPage * Number(recordsPerPage), totalCount)} (${totalCount})`)}
-          </span>
-
-          {/* Right Arrow Pair */}
-          <div
-            className="flex items-center shrink-0"
-          >
-            <div
-              className="flex items-center rounded overflow-hidden shadow-xs"
-              style={{
-                width: '49.89px',
-                height: '27.7px',
-                backgroundColor: '#8d9aa6',
-                borderRadius: '4px',
-              }}
-            >
-              {/* Next Page (>) */}
-              <button
-                disabled={totalCount === 0 || recordsPerPage === 'All' || currentPage * Number(recordsPerPage) >= totalCount}
-                onClick={() => handlePageChange(currentPage + 1)}
-                className="hover:bg-[#7b8894] disabled:opacity-85 flex items-center justify-center transition-colors h-full"
-                style={{
-                  width: '24.44px',
-                  height: '27.7px',
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  padding: 0,
-                }}
-                title="Next Page"
-              >
-                <svg width="6" height="11" viewBox="0 0 6 11" fill="white">
-                  <path d="M0.5 1L5.5 5.5L0.5 10V1Z" />
-                </svg>
-              </button>
-              {/* Divider */}
-              <div style={{ width: '1px', height: '14px', backgroundColor: '#6c7985' }}></div>
-              {/* Last Page (>>) */}
-              <button
-                disabled={totalCount === 0 || recordsPerPage === 'All' || currentPage * Number(recordsPerPage) >= totalCount}
-                onClick={() => handlePageChange(Math.ceil(totalCount / Number(recordsPerPage)) || 1)}
-                className="hover:bg-[#7b8894] disabled:opacity-85 flex items-center justify-center transition-colors h-full"
-                style={{
-                  width: '24.44px',
-                  height: '27.7px',
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  padding: 0,
-                }}
-                title="Last Page"
-              >
-                <svg width="11" height="11" viewBox="0 0 11 11" fill="white">
-                  <path d="M0.5 1L5.5 5.5L0.5 10V1ZM5.5 1L10.5 5.5L5.5 10V1Z" />
-                </svg>
-              </button>
-            </div>
-          </div>
+          <PaginationControls 
+            page={currentPage - 1} 
+            setPage={(p) => handlePageChange(p + 1)} 
+            size={recordsPerPage === 'All' ? 1000000 : Number(recordsPerPage)} 
+            totalCount={totalCount} 
+          />
 
           {/* Export to CSV */}
           <ToCsvButton className="ml-[16px]" onClick={exportToCSV} />

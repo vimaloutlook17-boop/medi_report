@@ -1,0 +1,62 @@
+import React from 'react';
+
+export const ApplyFilterButton = ({ onClick, id = "applyFilterBtn", text = "ApplyFilters" }) => {
+  return (
+    <button
+      id={id}
+      className="btn btn-primary shrink-0 flex items-center justify-center font-normal"
+      onClick={onClick}
+      style={{
+        color: '#FFFFFF',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        fontSize: '12px',
+        backgroundColor: '#007BFF',
+        padding: '4px 5px',
+        height: '35px',
+        width: '105px',
+        border: '1px solid transparent',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        outline: 'none',
+        whiteSpace: 'nowrap',
+        gap: '3px'
+      }}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-filter">
+        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+      </svg>
+      {text}
+    </button>
+  );
+};
+
+export const ResetButton = ({ onClick, id = "clearFilterBtn", text = "Reset" }) => {
+  return (
+    <button
+      id={id}
+      className="btn btn-secondary shrink-0 flex items-center justify-center font-normal"
+      onClick={onClick}
+      style={{
+        color: '#FFFFFF',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        fontSize: '12px',
+        backgroundColor: '#6C757D',
+        padding: '4px 5px',
+        height: '35px',
+        width: '105px',
+        border: '1px solid transparent',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        outline: 'none',
+        whiteSpace: 'nowrap',
+        gap: '3px'
+      }}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="feather feather-rotate-ccw">
+        <polyline points="1 4 1 10 7 10"></polyline>
+        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+      </svg>
+      {text}
+    </button>
+  );
+};

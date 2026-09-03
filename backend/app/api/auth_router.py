@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Request
 from app.auth import create_access_token
 import base64
 import os
@@ -14,6 +14,7 @@ router = APIRouter()
 
 @router.get("/generate-secure-url")
 async def generate_secure_url(
+    request: Request,
     token: str = Query(..., description="Base64 encoded shop ID (e.g. MTA1Nw==)"),
     module: str = Query("stocks", description="The module to redirect to (e.g., stocks, sales, doc)")
 ):
@@ -31,8 +32,8 @@ async def generate_secure_url(
     # 1. Generate the JWT token for this shop_id
     jwt_token = create_access_token(shop_id)
     
-    # 2. Build the secure frontend auth URL dynamically from environment
-    frontend_base = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+    # 2. Build the secure frontend auth URL dynamically based on the current server's address
+    frontend_base = str(request.base_url).rstrip("/")
     secure_url = f"{frontend_base}/auth?token={jwt_token}&module={module}"
     
     # 3. Return the exact JSON structure requested

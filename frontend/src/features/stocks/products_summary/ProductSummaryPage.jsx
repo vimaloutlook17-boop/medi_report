@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import ToExcelButton from '../../../components/ToExcelButton';
 import { useAuth } from '../../../AuthContext';
 import * as XLSX from 'xlsx';
+import NavigationTabs from '../../../components/NavigationTabs';
+import PaginationControls from '../../../components/PaginationControls';
 
 export default function ProductSummaryPage() {
   const { token } = useAuth();
@@ -111,42 +113,7 @@ export default function ProductSummaryPage() {
       `}</style>
       
       {/* Tabs Row Container */}
-      <div className="mb-[20px]">
-        <ul className="flex flex-wrap m-0 p-0 list-none text-[12.96px] text-[#212529] font-sans border-b border-[#ddd]">
-          {[
-            { label: 'Stocks', path: '/stocks/product-summary' },
-            { label: 'Products Summary', path: '/stocks/product-summary', active: true },
-            { label: 'Low Demand Stock', path: '#' },
-            { label: 'Zero Stocks', path: '/stocks/zero-stocks' },
-            { label: 'Age Wise Stocks', path: '#' },
-            { label: 'Low Quantity', path: '#' },
-            { label: 'Expired', path: '#' },
-            { label: 'Most Wanted', path: '#' },
-            { label: 'Approved', path: '#' },
-            { label: 'Purchase Return Items', path: '#' },
-            { label: 'Stock Report', path: '#' },
-            { label: 'Stock Report Batch Wise', path: '/stocks/stock-report-batch-wise' },
-            { label: 'Category Wise Product', path: '#' },
-            { label: 'Transaction Report', path: '#' },
-            { label: 'ProductWise Customer', path: '/sales/product-wise-customer' },
-          ].map((tab, i) => (
-            <li key={i} className="mr-[2px] mb-[-1px]">
-              {tab.active ? (
-                <span className="inline-block px-[10px] py-[7.2px] text-[#555] bg-white border border-[#ddd] border-b-transparent rounded-t-[4px] cursor-default relative z-10">
-                  {tab.label}
-                </span>
-              ) : (
-                <Link 
-                  to={tab.path} 
-                  className="inline-block px-[10px] py-[7.2px] border border-transparent rounded-t-[4px] text-[#007BFF] hover:bg-transparent hover:text-[#212529] hover:border-[#ddd] relative hover:z-10 transition-colors"
-                >
-                  {tab.label}
-                </Link>
-              )}
-            </li>
-          ))}
-        </ul>
-      </div>
+      <NavigationTabs activeTabLabel="Products Summary" />
 
       {/* Title */}
       <h3 className="text-[25.2px] text-[#323F52] font-medium mt-[15px] mb-[28px]">PRODUCT SUMMARY</h3>
@@ -235,8 +202,8 @@ export default function ProductSummaryPage() {
         {/* Form Inline wrapper mimicking older layout */}
         <div className="flex items-center text-[#212529] text-[12.96px]">
           
-          {/* Product Per Page */}
-          <h6 className="text-[#323F52] text-[14.4px] font-medium m-0 my-[7.2px]">Product Per Page</h6>
+          {/* Records Per Page */}
+          <h6 className="text-[#323F52] text-[15.84px] ml-0" style={{ margin: '0px 0px 7.2px 0px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>Records Per Page</h6>
           <select 
             value={size}
             onChange={(e) => { setSize(Number(e.target.value)); setPage(0); }}
@@ -250,43 +217,17 @@ export default function ProductSummaryPage() {
             <option value="10">10</option>
             <option value="25">25</option>
             <option value="50">50</option>
+            <option value="75">75</option>
+            <option value="100">100</option>
+            <option value="1000000">All</option>
           </select>
 
-          {/* Pagination Buttons & Text */}
           <div className="flex items-center ml-[10px]">
-            <button onClick={() => setPage(0)} disabled={page === 0} className="bg-[#6C757D] disabled:opacity-50 text-white w-[28.98px] h-[28.09px] py-[3.6px] px-[7.2px] rounded-l-[3px] border border-[#6c757d] hover:bg-[#5c636a] cursor-pointer flex items-center justify-center relative z-10">
-              <svg aria-hidden="true" focusable="false" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 16" className="h-[12px] w-auto" fill="currentColor">
-                <polygon points="18,0 9,8 18,16" />
-                <polygon points="9,0 0,8 9,16" />
-              </svg>
-            </button>
-            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="bg-[#6C757D] disabled:opacity-50 text-white w-[22.69px] h-[28.09px] py-[3.6px] px-[7.2px] rounded-r-[3px] border border-[#6c757d] ml-[-1px] hover:bg-[#5c636a] cursor-pointer flex items-center justify-center relative">
-              <svg aria-hidden="true" focusable="false" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 16" className="h-[12px] w-auto" fill="currentColor">
-                <polygon points="10,0 0,8 10,16" />
-              </svg>
-            </button>
-          </div>
-          
-          <span className="px-[5px] font-bold text-[#212529] text-[12.96px]">
-            {totalCount === 0 ? 0 : (page * size) + 1} to {Math.min((page + 1) * size, totalCount)} ({totalCount})
-          </span>
-          
-          <div className="flex items-center">
-            <button onClick={() => setPage(p => Math.min(Math.ceil(totalCount / size) - 1, p + 1))} disabled={page >= Math.ceil(totalCount / size) - 1 || totalCount === 0} className="bg-[#6C757D] disabled:opacity-50 text-white w-[22.69px] h-[28.09px] py-[3.6px] px-[7.2px] rounded-l-[3px] border border-[#6c757d] hover:bg-[#5c636a] cursor-pointer flex items-center justify-center relative z-10">
-              <svg aria-hidden="true" focusable="false" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 16" className="h-[12px] w-auto" fill="currentColor">
-                <polygon points="0,0 10,8 0,16" />
-              </svg>
-            </button>
-            <button onClick={() => setPage(Math.max(0, Math.ceil(totalCount / size) - 1))} disabled={page >= Math.ceil(totalCount / size) - 1 || totalCount === 0} className="bg-[#6C757D] disabled:opacity-50 text-white w-[28.98px] h-[28.09px] py-[3.6px] px-[7.2px] rounded-r-[3px] border border-[#6c757d] ml-[-1px] hover:bg-[#5c636a] cursor-pointer flex items-center justify-center relative">
-              <svg aria-hidden="true" focusable="false" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 16" className="h-[12px] w-auto" fill="currentColor">
-                <polygon points="0,0 9,8 0,16" />
-                <polygon points="9,0 18,8 9,16" />
-              </svg>
-            </button>
+            <PaginationControls page={page} setPage={setPage} size={size} totalCount={totalCount} />
           </div>
 
           {/* Page Selector */}
-          <h6 className="text-[#323F52] text-[14.4px] font-medium m-0 my-[7.2px] ml-[10px] mr-[3.6px]">Page</h6>
+          <h6 className="text-[#323F52] text-[15.84px] ml-[10px]" style={{ margin: '0px 3.6px 7.2px 10px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>Page</h6>
           <select 
             value={page}
             onChange={(e) => setPage(Number(e.target.value))}
@@ -370,12 +311,10 @@ export default function ProductSummaryPage() {
         </table>
       </div>
 
-      {/* Footer */}
-      <div className="w-full px-[15px] mt-[40px] text-[#A2ACBA] font-sans">
-        <div className="w-full text-center px-[15px] text-[10.368px]">
-          Copyright Ac NIGSOFT Private Ltd
-        </div>
-      </div>
+      {/* Footer pinned to bottom with small subtle font */}
+      <footer className="w-full text-center mt-auto pt-10 pb-4 text-[10.8px] text-[#6c757d] select-none font-sans">
+        Copyright &copy; NIGSOFT Private Ltd
+      </footer>
     </div>
   );
 }

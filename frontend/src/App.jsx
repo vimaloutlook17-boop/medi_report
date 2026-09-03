@@ -9,6 +9,9 @@ import ProductWiseCustomerList from './features/sales/product_wise_customer/Prod
 import ProductWiseUniqueCustomerList from './features/sales/product_wise_unique_customer/ProductWiseUniqueCustomerList';
 import CustomerWiseProductList from './features/sales/customer_wise_product/CustomerWiseProductList';
 
+import CollectionReportPage from './features/Reports/collection_report/CollectionReportPage';
+import OpIpReportPage from './features/Reports/op_ip_report/OpIpReportPage';
+
 import AuthHandler from './features/auth/AuthHandler';
 import { AuthProvider } from './AuthContext';
 
@@ -51,7 +54,8 @@ export default function App() {
               <Route path="/customer-wise-product" element={<CustomerWiseProductList />} />
 
               {/* Reports Module */}
-              <Route path="/reports/op_ip_report" element={<div className="p-4">OP IP Report Component (Coming Soon)</div>} />
+              <Route path="/reports/collection_report" element={<CollectionReportPage />} />
+              <Route path="/reports/op_ip_report" element={<OpIpReportPage />} />
             </Routes>
           </div>
         </div>
