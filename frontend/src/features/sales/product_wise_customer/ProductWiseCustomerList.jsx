@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import SearchableSelect from '../../../components/SearchableSelect';
 
@@ -30,12 +30,12 @@ const SAMPLE_CUSTOMERS = [
   'Priya Sharma'
 ];
 
-// Helper to format date as MM/DD/YYYY
+// Helper to format date as YYYY-MM-DD for HTML5 date inputs
 const formatDate = (d) => {
+  const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
-  const yyyy = d.getFullYear();
-  return `${mm}/${dd}/${yyyy}`;
+  return `${yyyy}-${mm}-${dd}`;
 };
 
 const getDateRangeForFilter = (filter) => {
@@ -73,25 +73,49 @@ const getDateRangeForFilter = (filter) => {
 };
 
 export default function ProductWiseCustomerList() {
-  // Filter States
-  const [selectedItem, setSelectedItem] = useState('');
-  const [customerName, setCustomerName] = useState('');
-  const [dateFilter, setDateFilter] = useState('Today');
-  const [fromDate, setFromDate] = useState(() => formatDate(new Date()));
-  const [toDate, setToDate] = useState(() => formatDate(new Date()));
+  // Filter States - Default to top item in shop 477 to show DB data immediately
+  const [selectedItem, setSelectedItem] = useState({ id: 44991, name: '10ML NIPRO', label: '10ML NIPRO (ID: 44991)' });
+  const [customerName, setCustomerName] = useState(null);
+  const [dateFilter, setDateFilter] = useState('Custom Date');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
   // Pagination & Table States
   const [recordsPerPage, setRecordsPerPage] = useState('10');
   const [currentPage, setCurrentPage] = useState(1);
-  const [sortField, setSortField] = useState('mobile');
+  const [sortField, setSortField] = useState('');
   const [sortOrder, setSortOrder] = useState('desc');
 
-  // Data rows (initial state empty as in screenshot)
+  // Data rows
   const [data, setData] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalQuantity, setTotalQuantity] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Calculate total count and total quantity
-  const totalCount = data.length;
-  const totalQuantity = data.reduce((sum, row) => sum + (Number(row.qty) || 0), 0);
+  // Search API functions for autocompletion
+  const searchItems = async (term) => {
+    try {
+      const res = await fetch(`http://localhost:8000/api/sales/product-wise-customer/search-items?term=${encodeURIComponent(term)}&shop_id=477`);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (err) {
+      console.error('Error fetching items:', err);
+    }
+    return [];
+  };
+
+  const searchPatients = async (term) => {
+    try {
+      const res = await fetch(`http://localhost:8000/api/sales/product-wise-customer/search-patients?term=${encodeURIComponent(term)}&shop_id=477`);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (err) {
+      console.error('Error fetching patients:', err);
+    }
+    return [];
+  };
 
   const handleDateFilterChange = (newFilter) => {
     setDateFilter(newFilter);
@@ -102,50 +126,89 @@ export default function ProductWiseCustomerList() {
     }
   };
 
+  const fetchReportData = async (page = currentPage, size = recordsPerPage, sort = sortField, order = sortOrder, item = selectedItem, fromD = fromDate, toD = toDate, cust = customerName) => {
+    const itemId = typeof item === 'object' ? item?.id : item;
+    setIsLoading(true);
+    try {
+      const patientSearch = typeof cust === 'object' ? cust?.name : cust;
+      const params = new URLSearchParams({
+        shop_id: '477',
+        page: String(Math.max(0, page - 1)),
+        size: String(size),
+        sort_field: sort || 'created_at',
+        sort_order: order || 'asc'
+      });
+      if (itemId) params.append('item_id', String(itemId));
+      if (fromD) params.append('fdate', fromD);
+      if (toD) params.append('tdate', toD);
+      if (patientSearch) params.append('customer_name', patientSearch);
+
+      const res = await fetch(`http://localhost:8000/api/sales/product-wise-customer/?${params.toString()}`);
+      if (res.ok) {
+        const json = await res.json();
+        setData(json.result || []);
+        setTotalCount(json.count || 0);
+        setTotalQuantity(json.totalqty || 0);
+        if (json.item_id && (!item || !item.id)) {
+          setSelectedItem({ id: json.item_id, label: `Product (ID: ${json.item_id})` });
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching report data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Automatically load data from DB on initial mount
+  useEffect(() => {
+    fetchReportData(1, 10, '', 'desc', { id: 44991 }, '', '');
+  }, []);
+
+  const handleApplyFilters = () => {
+    setCurrentPage(1);
+    fetchReportData(1, recordsPerPage, sortField, sortOrder);
+  };
+
   const handleReset = () => {
     const todayStr = formatDate(new Date());
-    setSelectedItem('');
-    setCustomerName('');
+    setSelectedItem(null);
+    setCustomerName(null);
     setDateFilter('Today');
     setFromDate(todayStr);
     setToDate(todayStr);
     setData([]);
-  };
-
-  const handleApplyFilters = () => {
-    console.log('Applying filters:', { selectedItem, customerName, dateFilter, fromDate, toDate });
+    setTotalCount(0);
+    setTotalQuantity(0);
+    setCurrentPage(1);
   };
 
   const handleSort = (field) => {
-    if (sortField === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortOrder('desc');
-    }
+    const newOrder = sortField === field && sortOrder === 'asc' ? 'desc' : 'asc';
+    setSortField(field);
+    setSortOrder(newOrder);
+    fetchReportData(currentPage, recordsPerPage, field, newOrder);
+  };
+
+  const handlePageChange = (newPage) => {
+    setCurrentPage(newPage);
+    fetchReportData(newPage, recordsPerPage, sortField, sortOrder);
+  };
+
+  const handleRecordsPerPageChange = (newSize) => {
+    setRecordsPerPage(newSize);
+    setCurrentPage(1);
+    fetchReportData(1, newSize, sortField, sortOrder);
   };
 
   const renderSortIcon = (field) => {
-    if (sortField === field) {
-      if (sortOrder === 'asc') {
-        return (
-          <svg className="w-2.5 h-2.5 text-black shrink-0" viewBox="0 0 12 8" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="square">
-            <path d="M2 6L6 2L10 6" />
-          </svg>
-        );
-      } else {
-        return (
-          <svg className="w-2.5 h-2.5 text-black shrink-0" viewBox="0 0 12 8" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="square">
-            <path d="M2 2L6 6L10 2" />
-          </svg>
-        );
-      }
-    }
     return (
-      <svg className="w-2.5 h-3 text-black shrink-0" viewBox="0 0 12 14" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="square">
-        <path d="M2 5.5L6 1.5L10 5.5" />
-        <path d="M2 8.5L6 12.5L10 8.5" />
-      </svg>
+      <span className="inline-flex items-center shrink-0">
+        <svg width="9" height="12" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M1.5 4.5L5 1L8.5 4.5" stroke="#000000" strokeWidth="2.2" strokeLinecap="square" strokeLinejoin="miter" />
+          <path d="M1.5 8.5L5 12L8.5 8.5" stroke="#000000" strokeWidth="2.2" strokeLinecap="square" strokeLinejoin="miter" />
+        </svg>
+      </span>
     );
   };
 
@@ -184,21 +247,9 @@ export default function ProductWiseCustomerList() {
   };
 
   const tabs = [
-    { label: 'Stocks', path: '/' },
-    { label: 'Products Summary', path: '/' },
-    { label: 'Low Demand Stock', path: '#' },
-    { label: 'Zero Stocks', path: '/zero-stocks' },
-    { label: 'Age Wise Stocks', path: '#' },
-    { label: 'Low Quantity', path: '#' },
-    { label: 'Expired', path: '#' },
-    { label: 'Most Wanted', path: '#' },
-    { label: 'Approved', path: '#' },
-    { label: 'Purchase Return Items', path: '#' },
-    { label: 'Stock Report', path: '#' },
-    { label: 'Stock Report Batch Wise', path: '/stock-report-batch-wise' },
-    { label: 'Category Wise Product', path: '#' },
-    { label: 'Transaction Report', path: '#' },
-    { label: 'ProductWise Customer', path: '/product-wise-customer', active: true },
+    { label: 'ProductWise Customer', path: '/sales/product-wise-customer', active: true },
+    { label: 'Product Wise Unique Customer', path: '/sales/product-wise-unique-customer' },
+    { label: 'Customer Wise Product', path: '/sales/customer-wise-product' },
   ];
 
   return (
@@ -232,7 +283,7 @@ export default function ProductWiseCustomerList() {
           fontSize: '25.2px',
           lineHeight: '30.24px',
           fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-          margin: '15px 0px 12px 0px',
+          margin: '18px 0px 28px 0px',
           fontWeight: '500',
           textTransform: 'uppercase',
         }}
@@ -247,7 +298,7 @@ export default function ProductWiseCustomerList() {
           color: '#212529',
           fontSize: '12.96px',
           fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-          margin: '36px 0px 14px 0px',
+          margin: '0px 0px 18px 0px',
           padding: '12px',
           backgroundColor: '#FFFFFF',
           border: '1px solid #dee2e6',
@@ -285,7 +336,7 @@ export default function ProductWiseCustomerList() {
           }}
         >
           {/* Select Item */}
-          <div className="flex-1 min-w-[140px]">
+          <div className="flex-1 min-w-[180px]">
             <SearchableSelect
               id="select2-item_value-container"
               label="Select Item"
@@ -294,12 +345,12 @@ export default function ProductWiseCustomerList() {
               placeholder="Type to search product..."
               minChars={2}
               minCharsMessage="Please enter 2 or more characters"
-              options={SAMPLE_PRODUCTS}
+              onSearch={searchItems}
             />
           </div>
 
           {/* Patient Name */}
-          <div className="flex-1 min-w-[140px]">
+          <div className="flex-1 min-w-[180px]">
             <SearchableSelect
               id="select2-search_customer_name-container"
               label="Patient Name"
@@ -308,7 +359,7 @@ export default function ProductWiseCustomerList() {
               placeholder="Type to search patient..."
               minChars={3}
               minCharsMessage="Please enter 3 or more characters"
-              options={SAMPLE_CUSTOMERS}
+              onSearch={searchPatients}
             />
           </div>
 
@@ -380,7 +431,7 @@ export default function ProductWiseCustomerList() {
           </div>
 
           {/* From Date */}
-          <div className="w-[110px] shrink-0">
+          <div className="w-[135px] shrink-0">
             <label
               htmlFor="fdate"
               style={{
@@ -397,26 +448,32 @@ export default function ProductWiseCustomerList() {
             <input
               id="fdate"
               className="form-control"
-              type="text"
+              type="date"
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
+              onClick={(e) => {
+                try {
+                  e.target.showPicker();
+                } catch (err) {}
+              }}
               style={{
                 color: '#495057',
                 fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
                 fontSize: '14.4px',
-                backgroundColor: '#E9ECEF',
-                padding: '4px 10.8px',
+                backgroundColor: '#FFFFFF',
+                padding: '4px 10px',
                 height: '35px',
                 border: '1px solid #ced4da',
                 borderRadius: '4px',
                 width: '100%',
                 outline: 'none',
+                cursor: 'pointer',
               }}
             />
           </div>
 
           {/* To Date */}
-          <div className="w-[110px] shrink-0">
+          <div className="w-[135px] shrink-0">
             <label
               htmlFor="tdate"
               style={{
@@ -433,20 +490,26 @@ export default function ProductWiseCustomerList() {
             <input
               id="tdate"
               className="form-control"
-              type="text"
+              type="date"
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
+              onClick={(e) => {
+                try {
+                  e.target.showPicker();
+                } catch (err) {}
+              }}
               style={{
                 color: '#495057',
                 fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
                 fontSize: '14.4px',
-                backgroundColor: '#E9ECEF',
-                padding: '4px 10.8px',
+                backgroundColor: '#FFFFFF',
+                padding: '4px 10px',
                 height: '35px',
                 border: '1px solid #ced4da',
                 borderRadius: '4px',
                 width: '100%',
                 outline: 'none',
+                cursor: 'pointer',
               }}
             />
           </div>
@@ -504,101 +567,109 @@ export default function ProductWiseCustomerList() {
         </div>
       </div>
 
-      {/* Control Toolbar (Total Count, Records Per Page, Pagination, Export) */}
-      <div className="flex flex-wrap items-center gap-5 my-3 text-[12.5px]">
-        {/* Total Count */}
-        <h6
+      {/* Table & Toolbar Wrapper */}
+      <div
+        className="col-lg-12 col-md-12 col-sm-12 mt-3"
+        style={{
+          color: '#212529',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+          fontSize: '12.96px',
+          margin: '14.4px 0px 0px',
+          padding: '0px 15px',
+        }}
+      >
+        {/* Control Toolbar Row (div.row) */}
+        <div
+          className="row flex flex-nowrap items-center w-full"
           style={{
-            color: '#323F52',
-            fontSize: '15.84px',
-            lineHeight: '19px',
+            margin: '0px -15px 12px -15px',
+            padding: '0px 15px',
+            color: '#212529',
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-            margin: '-5px 0px 0px 0px',
-            fontWeight: '600',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
+            fontSize: '12.96px',
+            minHeight: '36.4px',
           }}
         >
-          <span>Total Count :</span>
-          <span style={{ color: '#0052cc' }}>{totalCount}</span>
-        </h6>
-
-        {/* Records Per Page */}
-        <div className="flex items-center">
-          <h6
-            className="records-title"
+          {/* Total Count */}
+          <div
+            className="flex items-center shrink-0"
             style={{
               color: '#323F52',
               fontSize: '15.84px',
-              lineHeight: '19px',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-              margin: '0px 0px 7.2px 30px',
               fontWeight: '600',
-              whiteSpace: 'nowrap',
+              gap: '4px',
+              margin: 0,
+              padding: 0,
             }}
           >
-            Records Per Page
-          </h6>
-          <div className="relative" style={{ marginLeft: '10px', marginBottom: '7.2px' }}>
-            <select
-              id="pagesize"
-              className="form-control-sm custom-select pagesize"
-              value={recordsPerPage}
-              onChange={(e) => setRecordsPerPage(e.target.value)}
+            <span>Total Count :</span>
+            <span style={{ color: '#0052cc' }}>{totalCount}</span>
+          </div>
+
+          {/* Records Per Page */}
+          <div className="flex items-center shrink-0" style={{ marginLeft: '30px' }}>
+            <span
               style={{
-                width: '61.6px',
-                height: '34.4px',
-                color: '#495057',
-                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-                fontSize: '14.4px',
-                backgroundColor: '#FFFFFF',
-                padding: '5.4px 25.2px 5.4px 10.8px',
-                border: '1px solid #ced4da',
-                borderRadius: '4px',
-                appearance: 'none',
-                outline: 'none',
-                cursor: 'pointer',
+                color: '#323F52',
+                fontSize: '15.84px',
+                fontWeight: '600',
+                whiteSpace: 'nowrap',
+                marginRight: '10px',
               }}
             >
-              <option value="10">10</option>
-              <option value="25">25</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-            </select>
-            <div
-              className="pointer-events-none"
-              style={{
-                position: 'absolute',
-                right: '8px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-              }}
-            >
-              <svg className="w-2.5 h-3 text-black" viewBox="0 0 12 14" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="square">
-                <path d="M2 5.5L6 1.5L10 5.5" />
-                <path d="M2 8.5L6 12.5L10 8.5" />
-              </svg>
+              Records Per Page
+            </span>
+            <div className="relative flex items-center">
+              <select
+                id="pagesize"
+                className="form-control-sm custom-select pagesize"
+                value={recordsPerPage}
+                onChange={(e) => handleRecordsPerPageChange(e.target.value)}
+                style={{
+                  width: '61.6px',
+                  height: '34.4px',
+                  color: '#495057',
+                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                  fontSize: '14.4px',
+                  backgroundColor: '#FFFFFF',
+                  padding: '5.4px 25.2px 5.4px 10.8px',
+                  border: '1px solid #ced4da',
+                  borderRadius: '4px',
+                  appearance: 'none',
+                  outline: 'none',
+                  cursor: 'pointer',
+                  margin: 0,
+                }}
+              >
+                <option value="10">10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+              <div
+                className="pointer-events-none flex items-center justify-center"
+                style={{
+                  position: 'absolute',
+                  right: '8px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                }}
+              >
+                <svg width="8" height="12" viewBox="0 0 8 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M4 1L0.8 4.8H7.2L4 1Z" fill="#343a40" />
+                  <path d="M4 11L0.8 7.2H7.2L4 11Z" fill="#343a40" />
+                </svg>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Pagination Controls & Export Buttons */}
-        <div className="flex items-center" style={{ marginBottom: '7.2px' }}>
           {/* Left Arrow Pair */}
           <div
-            className="btn-group btn-group-sm mx-lg-1 mb-2 mb-sm-0"
-            role="group"
-            style={{
-              padding: '0px 0px 0px 30px',
-              width: '79.89px',
-              height: '27.7px',
-              display: 'inline-flex',
-              alignItems: 'center',
-            }}
+            className="flex items-center shrink-0"
+            style={{ marginLeft: '30px' }}
           >
             <div
-              className="flex items-center rounded overflow-hidden"
+              className="flex items-center rounded overflow-hidden shadow-xs"
               style={{
                 width: '49.89px',
                 height: '27.7px',
@@ -609,8 +680,8 @@ export default function ProductWiseCustomerList() {
               {/* First Page (<<) */}
               <button
                 disabled={currentPage === 1 || totalCount === 0}
-                onClick={() => setCurrentPage(1)}
-                className="hover:bg-[#7b8894] disabled:opacity-90 flex items-center justify-center transition-colors h-full"
+                onClick={() => handlePageChange(1)}
+                className="hover:bg-[#7b8894] disabled:opacity-85 flex items-center justify-center transition-colors h-full"
                 style={{
                   width: '24.44px',
                   height: '27.7px',
@@ -621,8 +692,8 @@ export default function ProductWiseCustomerList() {
                 }}
                 title="First Page"
               >
-                <svg className="w-2.5 h-2.5 fill-white" viewBox="0 0 24 24">
-                  <path d="M11.5 5.5L4 12L11.5 18.5V5.5ZM19.5 5.5L12 12L19.5 18.5V5.5Z" />
+                <svg width="11" height="11" viewBox="0 0 11 11" fill="white">
+                  <path d="M5.5 1L0.5 5.5L5.5 10V1ZM10.5 1L5.5 5.5L10.5 10V1Z" />
                 </svg>
               </button>
               {/* Divider */}
@@ -630,8 +701,8 @@ export default function ProductWiseCustomerList() {
               {/* Prev Page (<) */}
               <button
                 disabled={currentPage === 1 || totalCount === 0}
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                className="hover:bg-[#7b8894] disabled:opacity-90 flex items-center justify-center transition-colors h-full"
+                onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                className="hover:bg-[#7b8894] disabled:opacity-85 flex items-center justify-center transition-colors h-full"
                 style={{
                   width: '24.44px',
                   height: '27.7px',
@@ -642,8 +713,8 @@ export default function ProductWiseCustomerList() {
                 }}
                 title="Previous Page"
               >
-                <svg className="w-2.5 h-2.5 fill-white" viewBox="0 0 24 24">
-                  <path d="M15 5.5L7.5 12L15 18.5V5.5Z" />
+                <svg width="6" height="11" viewBox="0 0 6 11" fill="white">
+                  <path d="M5.5 1L0.5 5.5L5.5 10V1Z" />
                 </svg>
               </button>
             </div>
@@ -652,13 +723,14 @@ export default function ProductWiseCustomerList() {
           {/* Page Status */}
           <span
             id="get_items5_pager_info"
-            className="pagedisplay mx-1 mx-sm-0 select-none font-bold"
+            className="pagedisplay select-none font-bold shrink-0 flex items-center"
             style={{
               color: '#212529',
               fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
               fontSize: '12.96px',
-              padding: '0px 6px',
+              padding: '0px 10px',
               whiteSpace: 'nowrap',
+              margin: 0,
             }}
           >
             {totalCount === 0 ? '0 to 0 (0)' : `${(currentPage - 1) * Number(recordsPerPage) + 1} to ${Math.min(currentPage * Number(recordsPerPage), totalCount)} (${totalCount})`}
@@ -666,31 +738,55 @@ export default function ProductWiseCustomerList() {
 
           {/* Right Arrow Pair */}
           <div
-            className="btn-group btn-group-sm mx-lg-1 mb-2 mb-sm-0 flex items-center h-[27.7px]"
+            className="flex items-center shrink-0"
           >
-            <div className="flex items-center bg-[#8d9aa6] rounded overflow-hidden shadow-xs h-[27.7px]">
+            <div
+              className="flex items-center rounded overflow-hidden shadow-xs"
+              style={{
+                width: '49.89px',
+                height: '27.7px',
+                backgroundColor: '#8d9aa6',
+                borderRadius: '4px',
+              }}
+            >
               {/* Next Page (>) */}
               <button
                 disabled={totalCount === 0 || currentPage * Number(recordsPerPage) >= totalCount}
-                onClick={() => setCurrentPage((p) => p + 1)}
-                className="px-2 hover:bg-[#7b8894] disabled:opacity-90 flex items-center justify-center transition-colors h-full"
+                onClick={() => handlePageChange(currentPage + 1)}
+                className="hover:bg-[#7b8894] disabled:opacity-85 flex items-center justify-center transition-colors h-full"
+                style={{
+                  width: '24.44px',
+                  height: '27.7px',
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  padding: 0,
+                }}
                 title="Next Page"
               >
-                <svg className="w-2.5 h-2.5 fill-white" viewBox="0 0 24 24">
-                  <path d="M9 5.5L16.5 12L9 18.5V5.5Z" />
+                <svg width="6" height="11" viewBox="0 0 6 11" fill="white">
+                  <path d="M0.5 1L5.5 5.5L0.5 10V1Z" />
                 </svg>
               </button>
               {/* Divider */}
-              <div className="w-[1px] h-3.5 bg-[#6c7985]"></div>
+              <div style={{ width: '1px', height: '14px', backgroundColor: '#6c7985' }}></div>
               {/* Last Page (>>) */}
               <button
                 disabled={totalCount === 0 || currentPage * Number(recordsPerPage) >= totalCount}
-                onClick={() => setCurrentPage(Math.ceil(totalCount / Number(recordsPerPage)) || 1)}
-                className="px-2 hover:bg-[#7b8894] disabled:opacity-90 flex items-center justify-center transition-colors h-full"
+                onClick={() => handlePageChange(Math.ceil(totalCount / Number(recordsPerPage)) || 1)}
+                className="hover:bg-[#7b8894] disabled:opacity-85 flex items-center justify-center transition-colors h-full"
+                style={{
+                  width: '24.44px',
+                  height: '27.7px',
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  padding: 0,
+                }}
                 title="Last Page"
               >
-                <svg className="w-2.5 h-2.5 fill-white" viewBox="0 0 24 24">
-                  <path d="M4.5 5.5L12 12L4.5 18.5V5.5ZM12.5 5.5L20 12L12.5 18.5V5.5Z" />
+                <svg width="11" height="11" viewBox="0 0 11 11" fill="white">
+                  <path d="M0.5 1L5.5 5.5L0.5 10V1ZM5.5 1L10.5 5.5L5.5 10V1Z" />
                 </svg>
               </button>
             </div>
@@ -699,14 +795,14 @@ export default function ProductWiseCustomerList() {
           {/* Export to CSV */}
           <button
             id="csv"
-            className="btn btn-info btn-sm ml-3 font-bold uppercase tracking-wide transition-colors"
+            className="btn btn-info btn-sm font-bold uppercase tracking-wide transition-colors shrink-0"
             onClick={exportToCSV}
             style={{
               color: '#FFFFFF',
               fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
               fontSize: '12.6px',
               backgroundColor: '#17A2B8',
-              margin: '0px 0px 0px 14.4px',
+              margin: '0px 0px 0px 16px',
               padding: '3.6px 7.2px',
               height: '27.7px',
               borderRadius: '4px',
@@ -724,14 +820,14 @@ export default function ProductWiseCustomerList() {
           {/* Export to Excel */}
           <button
             id="excel"
-            className="btn btn-warning btn-sm font-bold uppercase tracking-wide transition-colors"
+            className="btn btn-warning btn-sm font-bold uppercase tracking-wide transition-colors shrink-0"
             onClick={exportToExcel}
             style={{
-              color: '#FFFFFF',
+              color: '#212529',
               fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
               fontSize: '12.6px',
-              backgroundColor: '#e8a217',
-              margin: '0px 0px 0px 7.2px',
+              backgroundColor: '#FFC107',
+              margin: '0px 0px 0px 8px',
               padding: '3.6px 7.2px',
               height: '27.7px',
               borderRadius: '4px',
@@ -746,26 +842,25 @@ export default function ProductWiseCustomerList() {
             TO EXCEL
           </button>
         </div>
-      </div>
 
-      {/* Main Data Table */}
-      <div className="border border-[#dee2e6] rounded overflow-hidden">
+        {/* Main Data Table */}
+        <div className="border border-[#dee2e6] rounded overflow-hidden">
         <table className="w-full border-collapse text-left">
           <thead>
-            <tr className="bg-[#f8f9fa] text-[#212529] font-bold border-b border-[#dee2e6]">
+            <tr className="bg-[#EEEEEE] text-[#212529] font-bold border-b border-[#dee2e6]">
               {/* S.No */}
-              <th className="border-r border-[#dee2e6] p-0 text-center w-14 font-bold" style={{ height: '28px' }}>
+              <th className="border-r border-[#dee2e6] p-0 text-center font-bold" style={{ width: '52px', minWidth: '52px', height: '38px' }}>
                 <div
                   className="tablesorter-header-inner"
                   style={{
                     color: '#212529',
                     fontFamily: 'Arial, sans-serif',
-                    fontSize: '12.96px',
-                    padding: '4px',
+                    fontSize: '13.5px',
+                    padding: '8px 4px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    height: '28px',
+                    height: '38px',
                   }}
                 >
                   S.No
@@ -776,24 +871,25 @@ export default function ProductWiseCustomerList() {
               <th
                 className="border-r border-[#dee2e6] p-0 cursor-pointer select-none font-bold"
                 onClick={() => handleSort('billNo')}
-                style={{ height: '28px' }}
+                style={{ width: '160px', minWidth: '130px', height: '38px' }}
               >
                 <div
                   className="tablesorter-header-inner"
                   style={{
                     color: '#212529',
                     fontFamily: 'Arial, sans-serif',
-                    fontSize: '12.96px',
-                    padding: '4px 18px 4px 4px',
+                    fontSize: '13.5px',
+                    padding: '8px 24px',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
-                    height: '28px',
+                    justifyContent: 'center',
+                    height: '38px',
                     position: 'relative',
+                    textAlign: 'center',
                   }}
                 >
                   <span>Bill No</span>
-                  <div style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)' }}>
+                  <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
                     {renderSortIcon('billNo')}
                   </div>
                 </div>
@@ -803,42 +899,44 @@ export default function ProductWiseCustomerList() {
               <th
                 className="border-r border-[#dee2e6] p-0 cursor-pointer select-none font-bold"
                 onClick={() => handleSort('date')}
-                style={{ height: '28px' }}
+                style={{ width: '150px', minWidth: '120px', height: '38px' }}
               >
                 <div
                   className="tablesorter-header-inner"
                   style={{
                     color: '#212529',
                     fontFamily: 'Arial, sans-serif',
-                    fontSize: '12.96px',
-                    padding: '4px 18px 4px 4px',
+                    fontSize: '13.5px',
+                    padding: '8px 24px',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
-                    height: '28px',
+                    justifyContent: 'center',
+                    height: '38px',
                     position: 'relative',
+                    textAlign: 'center',
                   }}
                 >
                   <span>Date</span>
-                  <div style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)' }}>
+                  <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
                     {renderSortIcon('date')}
                   </div>
                 </div>
               </th>
 
-              {/* Patient Name */}
-              <th className="border-r border-[#dee2e6] p-0 text-center font-bold" style={{ height: '28px' }}>
+              {/* Patient Name (Expansive Column) */}
+              <th className="border-r border-[#dee2e6] p-0 text-center font-bold" style={{ height: '38px' }}>
                 <div
                   className="tablesorter-header-inner"
                   style={{
                     color: '#212529',
                     fontFamily: 'Arial, sans-serif',
-                    fontSize: '12.96px',
-                    padding: '4px',
+                    fontSize: '13.5px',
+                    padding: '8px 15px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    height: '28px',
+                    height: '38px',
+                    textAlign: 'center',
                   }}
                 >
                   Patient Name
@@ -849,24 +947,25 @@ export default function ProductWiseCustomerList() {
               <th
                 className="border-r border-[#dee2e6] p-0 cursor-pointer select-none font-bold"
                 onClick={() => handleSort('mobile')}
-                style={{ height: '28px' }}
+                style={{ width: '130px', minWidth: '120px', height: '38px' }}
               >
                 <div
                   className="tablesorter-header-inner"
                   style={{
                     color: '#212529',
                     fontFamily: 'Arial, sans-serif',
-                    fontSize: '12.96px',
-                    padding: '4px 18px 4px 4px',
+                    fontSize: '13.5px',
+                    padding: '8px 24px',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
-                    height: '28px',
+                    justifyContent: 'center',
+                    height: '38px',
                     position: 'relative',
+                    textAlign: 'center',
                   }}
                 >
                   <span>Mobile</span>
-                  <div style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)' }}>
+                  <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
                     {renderSortIcon('mobile')}
                   </div>
                 </div>
@@ -876,24 +975,25 @@ export default function ProductWiseCustomerList() {
               <th
                 className="border-r border-[#dee2e6] p-0 cursor-pointer select-none font-bold"
                 onClick={() => handleSort('qty')}
-                style={{ height: '28px' }}
+                style={{ width: '130px', minWidth: '100px', height: '38px' }}
               >
                 <div
                   className="tablesorter-header-inner"
                   style={{
                     color: '#212529',
                     fontFamily: 'Arial, sans-serif',
-                    fontSize: '12.96px',
-                    padding: '4px 18px 4px 4px',
+                    fontSize: '13.5px',
+                    padding: '8px 20px',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
-                    height: '28px',
+                    justifyContent: 'center',
+                    height: '38px',
                     position: 'relative',
+                    textAlign: 'center',
                   }}
                 >
                   <span>Qty</span>
-                  <div style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)' }}>
+                  <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
                     {renderSortIcon('qty')}
                   </div>
                 </div>
@@ -903,24 +1003,25 @@ export default function ProductWiseCustomerList() {
               <th
                 className="border-r border-[#dee2e6] p-0 cursor-pointer select-none font-bold"
                 onClick={() => handleSort('batch')}
-                style={{ height: '28px' }}
+                style={{ width: '150px', minWidth: '120px', height: '38px' }}
               >
                 <div
                   className="tablesorter-header-inner"
                   style={{
                     color: '#212529',
                     fontFamily: 'Arial, sans-serif',
-                    fontSize: '12.96px',
-                    padding: '4px 18px 4px 4px',
+                    fontSize: '13.5px',
+                    padding: '8px 24px',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
-                    height: '28px',
+                    justifyContent: 'center',
+                    height: '38px',
                     position: 'relative',
+                    textAlign: 'center',
                   }}
                 >
                   <span>Batch</span>
-                  <div style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)' }}>
+                  <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
                     {renderSortIcon('batch')}
                   </div>
                 </div>
@@ -930,24 +1031,25 @@ export default function ProductWiseCustomerList() {
               <th
                 className="p-0 cursor-pointer select-none font-bold"
                 onClick={() => handleSort('expDate')}
-                style={{ height: '28px' }}
+                style={{ width: '150px', minWidth: '120px', height: '38px' }}
               >
                 <div
                   className="tablesorter-header-inner"
                   style={{
                     color: '#212529',
                     fontFamily: 'Arial, sans-serif',
-                    fontSize: '12.96px',
-                    padding: '4px 18px 4px 4px',
+                    fontSize: '13.5px',
+                    padding: '8px 24px',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
-                    height: '28px',
+                    justifyContent: 'center',
+                    height: '38px',
                     position: 'relative',
+                    textAlign: 'center',
                   }}
                 >
                   <span>Exp Date</span>
-                  <div style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)' }}>
+                  <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
                     {renderSortIcon('expDate')}
                   </div>
                 </div>
@@ -956,7 +1058,13 @@ export default function ProductWiseCustomerList() {
           </thead>
 
           <tbody>
-            {data.length === 0 ? (
+            {isLoading ? (
+              <tr className="bg-white">
+                <td colSpan={8} className="py-6 text-center text-[13px] text-[#495057] font-normal">
+                  Loading...
+                </td>
+              </tr>
+            ) : data.length === 0 ? (
               <tr className="bg-white">
                 <td colSpan={8} className="py-6 text-center text-[13px] text-[#495057] font-normal">
                   No Data Found
@@ -965,7 +1073,9 @@ export default function ProductWiseCustomerList() {
             ) : (
               data.map((row, index) => (
                 <tr key={index} className="border-b border-[#dee2e6] hover:bg-gray-50">
-                  <td className="py-2.5 px-3 text-center text-gray-600 border-r border-[#dee2e6]">{index + 1}</td>
+                  <td className="py-2.5 px-3 text-center text-gray-600 border-r border-[#dee2e6]">
+                    {(currentPage - 1) * Number(recordsPerPage) + index + 1}
+                  </td>
                   <td className="py-2.5 px-3 text-gray-700 font-medium border-r border-[#dee2e6]">{row.billNo}</td>
                   <td className="py-2.5 px-3 text-gray-600 border-r border-[#dee2e6]">{row.date}</td>
                   <td className="py-2.5 px-4 text-gray-800 border-r border-[#dee2e6]">{row.customerName}</td>
@@ -980,7 +1090,7 @@ export default function ProductWiseCustomerList() {
 
           {/* Table Footer: Total Quantity */}
           <tfoot>
-            <tr className="bg-[#f8f9fa] text-[#212529] font-bold border-t border-[#dee2e6]">
+            <tr className="bg-[#EEEEEE] text-[#212529] font-bold border-t border-[#dee2e6]">
               <td colSpan={5} className="py-2.5 px-4 text-right">
                 Total Quantity
               </td>
@@ -991,6 +1101,12 @@ export default function ProductWiseCustomerList() {
             </tr>
           </tfoot>
         </table>
+      </div>
+      </div>
+
+      {/* Footer */}
+      <div className="w-full text-center py-6 mt-4 text-[12px] text-[#6c757d] select-none font-sans">
+        Copyright &copy; NIGSOFT Private Ltd
       </div>
     </div>
   );
