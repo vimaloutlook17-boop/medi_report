@@ -13,8 +13,24 @@ from contextlib import asynccontextmanager
 from app.database import init_db, close_db
 from fastapi.middleware.cors import CORSMiddleware
 
+import logging
+import re
+
+class TokenMaskFilter(logging.Filter):
+    # Masks sensitive token parameters in Uvicorn terminal logs
+    def filter(self, record):
+        if record.args and len(record.args) >= 3 and isinstance(record.args[2], str):
+            if 'token=' in record.args[2]:
+                new_args = list(record.args)
+                new_args[2] = re.sub(r'(token=)[^& ]+', r'\g<1>***MASKED***', new_args[2])
+                record.args = tuple(new_args)
+        return True
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Apply token masking to terminal logs
+    logging.getLogger("uvicorn.access").addFilter(TokenMaskFilter())
+    
     await init_db()
     yield
     await close_db()
