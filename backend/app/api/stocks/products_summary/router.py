@@ -10,7 +10,7 @@ router = APIRouter()
 @router.get("/")
 async def get_products_summary(
     product_id: str = Query(..., description="Product Item ID"),
-    date_filter: str = Query('Today', description="Date filter"),
+    date_filter: Optional[str] = Query(None, description="Date filter"),
     from_date: Optional[str] = Query(None, description="Custom from date (YYYY-MM-DD)"),
     to_date: Optional[str] = Query(None, description="Custom to date (YYYY-MM-DD)"),
     page: int = Query(0, description="Page index (0-based)"),
@@ -67,14 +67,44 @@ async def get_master_list(
             
             if size == -1:
                 if search:
-                    await cur.execute("SELECT id, name as product, totalqty as qty, status FROM item WHERE shop_id = %s AND name = %s ORDER BY name ASC", (shop_id, search))
+                    await cur.execute("""
+                        SELECT i.id, i.name as product, IFNULL(SUM(b.totalqty), 0) as qty, i.status 
+                        FROM item i 
+                        LEFT JOIN batch_no b ON i.id = b.item_id AND b.shop_id = i.shop_id
+                        WHERE i.shop_id = %s AND i.name = %s 
+                        GROUP BY i.id 
+                        ORDER BY i.name ASC
+                    """, (shop_id, search))
                 else:
-                    await cur.execute("SELECT id, name as product, totalqty as qty, status FROM item WHERE shop_id = %s ORDER BY name ASC", (shop_id,))
+                    await cur.execute("""
+                        SELECT i.id, i.name as product, IFNULL(SUM(b.totalqty), 0) as qty, i.status 
+                        FROM item i 
+                        LEFT JOIN batch_no b ON i.id = b.item_id AND b.shop_id = i.shop_id
+                        WHERE i.shop_id = %s 
+                        GROUP BY i.id 
+                        ORDER BY i.name ASC
+                    """, (shop_id,))
             else:
                 if search:
-                    await cur.execute("SELECT id, name as product, totalqty as qty, status FROM item WHERE shop_id = %s AND name = %s ORDER BY name ASC LIMIT %s, %s", (shop_id, search, offset, size))
+                    await cur.execute("""
+                        SELECT i.id, i.name as product, IFNULL(SUM(b.totalqty), 0) as qty, i.status 
+                        FROM item i 
+                        LEFT JOIN batch_no b ON i.id = b.item_id AND b.shop_id = i.shop_id
+                        WHERE i.shop_id = %s AND i.name = %s 
+                        GROUP BY i.id 
+                        ORDER BY i.name ASC 
+                        LIMIT %s, %s
+                    """, (shop_id, search, offset, size))
                 else:
-                    await cur.execute("SELECT id, name as product, totalqty as qty, status FROM item WHERE shop_id = %s ORDER BY name ASC LIMIT %s, %s", (shop_id, offset, size))
+                    await cur.execute("""
+                        SELECT i.id, i.name as product, IFNULL(SUM(b.totalqty), 0) as qty, i.status 
+                        FROM item i 
+                        LEFT JOIN batch_no b ON i.id = b.item_id AND b.shop_id = i.shop_id
+                        WHERE i.shop_id = %s 
+                        GROUP BY i.id 
+                        ORDER BY i.name ASC 
+                        LIMIT %s, %s
+                    """, (shop_id, offset, size))
                     
             items = await cur.fetchall()
             

@@ -3,7 +3,7 @@ from datetime import date, timedelta
 import calendar
 from aiomysql import Connection
 
-async def fetch_product_summary(conn: Connection, shop_id: int, product_id: str, date_filter: str, from_date: Optional[str] = None, to_date: Optional[str] = None, size: int = 10, page: int = 0):
+async def fetch_product_summary(conn: Connection, shop_id: int, product_id: str, date_filter: Optional[str] = None, from_date: Optional[str] = None, to_date: Optional[str] = None, size: int = 10, page: int = 0):
     offset = page * size
 
     # Date calculations
@@ -71,7 +71,7 @@ async def fetch_product_summary(conn: Connection, shop_id: int, product_id: str,
 
     # Check shop config
     async with conn.cursor() as cur:
-        await cur.execute("SELECT stock_room FROM shop_configuration WHERE shop_id = %s", (shop_id,))
+        await cur.execute("SELECT stock_room FROM shop_config WHERE shop_id = %s", (shop_id,))
         config = await cur.fetchone()
         is_stock_room_enabled = config and config.get('stock_room') == 'YES'
 
@@ -88,16 +88,16 @@ async def fetch_product_summary(conn: Connection, shop_id: int, product_id: str,
     if is_stock_room_enabled:
         purchase_sql = f"""
             SELECT srr.received_date as invoicedate, 'Purchase' as vendorname, SUM(srri.total_qty) as purchaseqty, NULL as saleqty,
-            'purchase' as type, srr.user_id as created_by,
-            NULL as returnqty, NULL as purchase_returnqty, srr.created_at as created_date_time
+            'purchase' as type, (SELECT name FROM users WHERE id = srr.user_id) as created_by,
+            NULL as returnqty, NULL as purchase_returnqty, MAX(srr.created_at) as created_date_time
             FROM stock_room_transaction_receipt_items srri
             JOIN stock_room_transaction_receipts srr on srr.id = srri.receipt_id
             WHERE srri.item_id = %s {date_condition_srr} and srri.shop_id = %s
             GROUP BY srr.id
             UNION ALL
             SELECT purchase_order.invoice_date as invoicedate, 'Purchase' as vendorname, SUM(purchase_order_item.stotalqty) as purchaseqty, NULL as saleqty, 
-            'purchase' as type, purchase_order.updated_by as created_by,
-            NULL as returnqty, NULL as purchase_returnqty, purchase_order_item.created_at as created_date_time
+            'purchase' as type, (SELECT name FROM users WHERE id = purchase_order.updated_by) as created_by,
+            NULL as returnqty, NULL as purchase_returnqty, MAX(purchase_order_item.created_at) as created_date_time
             FROM purchase_order_item JOIN purchase_order on purchase_order.purchase_order_id = purchase_order_item.po_id 
             WHERE purchase_order_item.item_id = %s {date_condition_po} and purchase_order.shop_id = %s
             AND purchase_order.save_later = 'complete'
@@ -108,8 +108,8 @@ async def fetch_product_summary(conn: Connection, shop_id: int, product_id: str,
     else:
         purchase_sql = f"""
             SELECT purchase_order.invoice_date as invoicedate, 'Purchase' as vendorname, SUM(purchase_order_item.stotalqty) as purchaseqty, NULL as saleqty, 
-            'purchase' as type, purchase_order.updated_by as created_by,
-            NULL as returnqty, NULL as purchase_returnqty, purchase_order_item.created_at as created_date_time
+            'purchase' as type, (SELECT name FROM users WHERE id = purchase_order.updated_by) as created_by,
+            NULL as returnqty, NULL as purchase_returnqty, MAX(purchase_order_item.created_at) as created_date_time
             FROM purchase_order_item JOIN purchase_order on purchase_order.purchase_order_id = purchase_order_item.po_id 
             WHERE purchase_order_item.item_id = %s {date_condition_po} and purchase_order.shop_id = %s
             AND purchase_order.save_later = 'complete'
@@ -120,36 +120,45 @@ async def fetch_product_summary(conn: Connection, shop_id: int, product_id: str,
     full_sql = f"""
         {purchase_sql}
         UNION
-        SELECT bill_details.bill_date as invoicedate, 'Sales' as vendorname, NULL as purchaseqty, SUM(bill_details.final_qty) as saleqty, 
-        'sales' as type, created_by as created_by,
-        NULL as returnqty, NULL as purchase_returnqty, bill_details.bill_date as created_date_time
-        FROM bill_details WHERE bill_details.item_id = %s {date_condition_bill} and bill_details.shop_id = %s 
+        SELECT MAX(bill_details.bill_date) as invoicedate, 'Sales' as vendorname, NULL as purchaseqty, SUM(bill_details.final_qty) as saleqty, 
+        'sales' as type, (SELECT name FROM users WHERE id = bill_details.created_by) as created_by,
+        NULL as returnqty, NULL as purchase_returnqty, MAX(bill_details.bill_date) as created_date_time
+        FROM bill_details 
+        JOIN bill ON bill.bill_id = bill_details.bill_id 
+        WHERE bill_details.item_id = %s {date_condition_bill} and bill_details.shop_id = %s 
+        AND bill.is_deleted = 'no' AND bill.status NOT LIKE 'Cancelled%%'
         GROUP BY DATE(bill_details.bill_date), bill_details.created_by
         UNION
-        SELECT bill_details.bill_date as invoicedate, 'Free Qty' as vendorname, NULL as purchaseqty, SUM(bill_details.free_qty) as saleqty, 
-        'sales' as type, created_by as created_by,
-        NULL as returnqty, NULL as purchase_returnqty, bill_details.bill_date as created_date_time
-        FROM bill_details WHERE bill_details.item_id = %s {date_condition_bill} and bill_details.shop_id = %s 
+        SELECT MAX(bill_details.bill_date) as invoicedate, 'Free Qty' as vendorname, NULL as purchaseqty, SUM(bill_details.free_qty) as saleqty, 
+        'sales' as type, (SELECT name FROM users WHERE id = bill_details.created_by) as created_by,
+        NULL as returnqty, NULL as purchase_returnqty, MAX(bill_details.bill_date) as created_date_time
+        FROM bill_details 
+        JOIN bill ON bill.bill_id = bill_details.bill_id 
+        WHERE bill_details.item_id = %s {date_condition_bill} and bill_details.shop_id = %s 
         AND bill_details.free_qty != 0
+        AND bill.is_deleted = 'no' AND bill.status NOT LIKE 'Cancelled%%'
         GROUP BY DATE(bill_details.bill_date), bill_details.created_by
         UNION
         SELECT date(stock_update.created_at) as invoicedate, 'Stock Update' as vendorname,
         CASE WHEN type='Sales Return' THEN NULL ELSE SUM(diff_qty) END as purchaseqty, NULL as saleqty, 
-        type as type, created_by as created_by,
-        CASE WHEN type='Sales Return' THEN SUM(diff_qty) ELSE NULL END as returnqty, NULL as purchase_returnqty, stock_update.created_at as created_date_time
+        type as type, (SELECT name FROM users WHERE id = stock_update.created_by) as created_by,
+        CASE WHEN type='Sales Return' THEN SUM(diff_qty) ELSE NULL END as returnqty, NULL as purchase_returnqty, MAX(stock_update.created_at) as created_date_time
         FROM stock_update WHERE stock_update.item_id = %s and stock_update.shop_id = %s and stock_update.diff_qty != 0 {date_condition_su} 
         GROUP BY DATE(stock_update.created_at), stock_update.created_by, type
         UNION
         SELECT date(purchase_return_entry.created_at) as invoicedate, 'Return Purchase' as vendorname, NULL as purchaseqty, NULL as saleqty, 
-        NULL as type, created_by as created_by,
-        NULL as returnqty, SUM(return_qty) as purchase_returnqty, purchase_return_entry.created_at as created_date_time
+        NULL as type, (SELECT name FROM users WHERE id = purchase_return_entry.created_by) as created_by,
+        NULL as returnqty, SUM(return_qty) as purchase_returnqty, MAX(purchase_return_entry.created_at) as created_date_time
         FROM purchase_return_entry WHERE purchase_return_entry.item_id = %s and purchase_return_entry.shop_id = %s
         GROUP BY DATE(purchase_return_entry.created_at), id
         UNION
-        SELECT bill_details.bill_date as invoicedate, 'Return Sales' as vendorname, NULL as purchaseqty, NULL as saleqty, 
-        'return' as type, created_by as created_by,
-        SUM(returned_qty) as returnqty, NULL as purchase_returnqty, bill_details.created_at as created_date_time
-        FROM bill_details WHERE bill_details.item_id = %s {date_condition_bill} and bill_details.shop_id = %s AND bill_details.returned_qty != 0
+        SELECT MAX(bill_details.bill_date) as invoicedate, 'Return Sales' as vendorname, NULL as purchaseqty, NULL as saleqty, 
+        'return' as type, (SELECT name FROM users WHERE id = bill_details.created_by) as created_by,
+        SUM(returned_qty) as returnqty, NULL as purchase_returnqty, MAX(bill_details.created_at) as created_date_time
+        FROM bill_details 
+        JOIN bill ON bill.bill_id = bill_details.bill_id 
+        WHERE bill_details.item_id = %s {date_condition_bill} and bill_details.shop_id = %s AND bill_details.returned_qty != 0
+        AND bill.is_deleted = 'no' AND bill.status NOT LIKE 'Cancelled%%'
         GROUP BY DATE(bill_details.bill_date), bill_details.created_by
         ORDER BY created_date_time ASC
     """
@@ -226,11 +235,15 @@ async def fetch_product_summary(conn: Connection, shop_id: int, product_id: str,
             UNION ALL
             SELECT 0, SUM(bill_details.final_qty), 0, 0, 0, 0
             FROM bill_details 
+            JOIN bill ON bill.bill_id = bill_details.bill_id 
             WHERE bill_details.item_id = %s AND bill_details.shop_id = %s AND DATE(bill_details.bill_date) <= %s
+            AND bill.is_deleted = 'no' AND bill.status NOT LIKE 'Cancelled%%'
             UNION ALL
             SELECT 0, 0, SUM(bill_details.free_qty), 0, 0, 0
             FROM bill_details 
+            JOIN bill ON bill.bill_id = bill_details.bill_id 
             WHERE bill_details.item_id = %s AND bill_details.shop_id = %s AND bill_details.free_qty != 0 AND DATE(bill_details.bill_date) <= %s
+            AND bill.is_deleted = 'no' AND bill.status NOT LIKE 'Cancelled%%'
             UNION ALL
             SELECT 0, 0, 0, SUM(stock_update.diff_qty), 0, 0
             FROM stock_update 
@@ -238,7 +251,9 @@ async def fetch_product_summary(conn: Connection, shop_id: int, product_id: str,
             UNION ALL
             SELECT 0, 0, 0, 0, SUM(bill_details.returned_qty), 0
             FROM bill_details 
+            JOIN bill ON bill.bill_id = bill_details.bill_id 
             WHERE bill_details.item_id = %s AND bill_details.shop_id = %s AND bill_details.returned_qty != 0 AND DATE(bill_details.bill_date) <= %s
+            AND bill.is_deleted = 'no' AND bill.status NOT LIKE 'Cancelled%'
             UNION ALL
             SELECT 0, 0, 0, 0, 0, SUM(purchase_return_entry.return_qty)
             FROM purchase_return_entry 

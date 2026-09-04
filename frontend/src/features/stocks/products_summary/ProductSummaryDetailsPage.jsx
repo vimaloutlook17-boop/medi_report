@@ -1,8 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
+import * as XLSX from 'xlsx';
 import ToExcelButton from '../../../components/ToExcelButton';
+import Loader from '../../../components/Loader';
 import PaginationControls from '../../../components/PaginationControls';
 import { useAuth } from '../../../AuthContext';
+
+const formatDateTime = (dateStr) => {
+  if (!dateStr || String(dateStr).startsWith('0000-00-00')) return '-';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '-';
+  
+  const pad = (n) => n.toString().padStart(2, '0');
+  const day = pad(d.getDate());
+  const month = pad(d.getMonth() + 1);
+  const year = d.getFullYear();
+  
+  let hours = d.getHours();
+  const minutes = pad(d.getMinutes());
+  const seconds = pad(d.getSeconds());
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  
+  return `${day}-${month}-${year} ${pad(hours)}:${minutes}:${seconds} ${ampm}`;
+};
 
 export default function ProductSummaryDetailsPage() {
   const { token } = useAuth();
@@ -11,7 +33,6 @@ export default function ProductSummaryDetailsPage() {
   const productName = searchParams.get('name') || '';
   const availableStock = searchParams.get('qty') || '0';
 
-  const [dateFilter, setDateFilter] = useState('current_month');
   const [transactions, setTransactions] = useState([]);
   const [openingBalance, setOpeningBalance] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
@@ -20,10 +41,73 @@ export default function ProductSummaryDetailsPage() {
   const [size, setSize] = useState(10);
   const [loading, setLoading] = useState(false);
 
+
+  const exportToExcel = () => {
+    const exportData = [];
+    exportData.push({
+      "Date": "-",
+      "Type": "Stock Quantity Bf",
+      "Purchase Qty": openingBalance,
+      "Sale Qty": "",
+      "Purchase Return Qty": "",
+      "Sale Return Qty": "",
+      "Created / Updated": ""
+    });
+
+    transactions.forEach(row => {
+      exportData.push({
+        "Date": formatDateTime(row.invoicedate) || '-',
+        "Type": (row.type || row.vendorname || '').toUpperCase(),
+        "Purchase Qty": row.purchaseqty || '',
+        "Sale Qty": row.saleqty || '',
+        "Purchase Return Qty": row.purchase_returnqty || '',
+        "Sale Return Qty": row.returnqty || '',
+        "Created / Updated": row.created_by || '-'
+      });
+    });
+
+    exportData.push({
+      "Date": "Total",
+      "Type": "",
+      "Purchase Qty": totalPurchase,
+      "Sale Qty": totalSale,
+      "Purchase Return Qty": totalPurchaseReturn,
+      "Sale Return Qty": totalSaleReturn,
+      "Created / Updated": ""
+    });
+
+    exportData.push({
+      "Date": "Stock Qty:",
+      "Type": finalStockQty,
+      "Purchase Qty": "",
+      "Sale Qty": "",
+      "Purchase Return Qty": "",
+      "Sale Return Qty": "",
+      "Created / Updated": ""
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    
+    // Set column widths to prevent squishing
+    worksheet['!cols'] = [
+      { wch: 25 }, // Date
+      { wch: 22 }, // Type
+      { wch: 15 }, // Purchase Qty
+      { wch: 15 }, // Sale Qty
+      { wch: 22 }, // Purchase Return Qty
+      { wch: 20 }, // Sale Return Qty
+      { wch: 20 }  // Created / Updated
+    ];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Summary");
+    XLSX.writeFile(workbook, "table_export.xlsx");
+  };
+
   useEffect(() => {
+
     if (!id || !token) return;
     setLoading(true);
-    fetch(`/api/stocks/products-summary?product_id=${id}&date_filter=${dateFilter}&page=${page}&size=${size}`, {
+    fetch(`/api/stocks/products-summary/?product_id=${id}&page=${page}&size=${size}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -34,9 +118,24 @@ export default function ProductSummaryDetailsPage() {
       })
       .catch(err => console.error("Error fetching details:", err))
       .finally(() => setLoading(false));
-  }, [id, dateFilter, page, size, token]);
+  }, [id, page, size, token]);
 
   const totalPages = Math.ceil(totalCount / size);
+
+  // Calculate totals
+  let totalPurchase = 0;
+  let totalSale = 0;
+  let totalPurchaseReturn = 0;
+  let totalSaleReturn = 0;
+
+  transactions.forEach(row => {
+    totalPurchase += Number(row.purchaseqty) || 0;
+    totalSale += Number(row.saleqty) || 0;
+    totalPurchaseReturn += Number(row.purchase_returnqty) || 0;
+    totalSaleReturn += Number(row.returnqty) || 0;
+  });
+
+  const finalStockQty = (Number(openingBalance) || 0) + totalPurchase - totalSale + totalSaleReturn - totalPurchaseReturn;
 
   return (
     <div className="px-[15px] pt-[15px] pb-0 bg-white min-h-full flex flex-col">
@@ -79,6 +178,9 @@ export default function ProductSummaryDetailsPage() {
             <option value="10">10</option>
             <option value="25">25</option>
             <option value="50">50</option>
+            <option value="75">75</option>
+            <option value="100">100</option>
+            <option value="-1">All</option>
           </select>
         </div>
 
@@ -88,72 +190,97 @@ export default function ProductSummaryDetailsPage() {
         </div>
 
         {/* Excel Button */}
-        <ToExcelButton className="ml-[14.4px]" />
+        <ToExcelButton onClick={exportToExcel} className="ml-[14.4px]" />
       </div>
 
-      {/* Data Table */}
-      <div className="mb-[20px] overflow-x-auto">
-        <table className="w-full text-left border-collapse border border-[#dee2e6]">
-          <thead>
-            <tr className="bg-[#EEEEEE] border-b-[2px] border-[#dee2e6]">
-              <th className="font-bold text-[#212529] text-[12.96px]" style={{ padding: '4px', fontFamily: 'Arial, sans-serif' }}>Date</th>
-              <th className="font-bold text-[#212529] text-[12.96px]" style={{ padding: '4px', fontFamily: 'Arial, sans-serif' }}>Type</th>
-              <th className="font-bold text-[#212529] text-[12.96px]" style={{ padding: '4px', fontFamily: 'Arial, sans-serif' }}>Purchase Qty</th>
-              <th className="font-bold text-[#212529] text-[12.96px]" style={{ padding: '4px', fontFamily: 'Arial, sans-serif' }}>Sale Qty</th>
-              <th className="font-bold text-[#212529] text-[12.96px]" style={{ padding: '4px', fontFamily: 'Arial, sans-serif' }}>Purchase Return Qty</th>
-              <th className="font-bold text-[#212529] text-[12.96px]" style={{ padding: '4px', fontFamily: 'Arial, sans-serif' }}>Sale Return Qty</th>
-              <th className="font-bold text-[#212529] text-[12.96px]" style={{ padding: '4px', fontFamily: 'Arial, sans-serif' }}>Created / Updated</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan="7" className="p-[10.8px] text-center text-[#212529] text-[12.96px]">Loading...</td>
+        {/* Data Table */}
+        <div className="mb-[20px] overflow-x-auto relative min-h-[150px]">
+          {loading && (
+            <div className="absolute inset-0 bg-white/70 z-10 flex items-center justify-center">
+              <Loader />
+            </div>
+          )}
+          <table className="w-full text-left border-collapse border border-[#dee2e6]">
+            <thead>
+              <tr className="bg-[#EEEEEE] border-b-[2px] border-[#dee2e6]">
+                <th className="font-bold text-[#212529] text-[12.96px]" style={{ padding: '4px' }}>Date</th>
+                <th className="font-bold text-[#212529] text-[12.96px]" style={{ padding: '4px' }}>Type</th>
+                <th className="font-bold text-[#212529] text-[12.96px]" style={{ padding: '4px' }}>Purchase Qty</th>
+                <th className="font-bold text-[#212529] text-[12.96px]" style={{ padding: '4px' }}>Sale Qty</th>
+                <th className="font-bold text-[#212529] text-[12.96px]" style={{ padding: '4px' }}>Purchase Return Qty</th>
+                <th className="font-bold text-[#212529] text-[12.96px]" style={{ padding: '4px' }}>Sale Return Qty</th>
+                <th className="font-bold text-[#212529] text-[12.96px]" style={{ padding: '4px' }}>Created / Updated</th>
               </tr>
-            ) : (
-              <>
-                {/* Stock Quantity Before (Opening Balance) Row */}
-                <tr className="bg-[#C0C0C0] border-t border-[#dee2e6]">
-                  <td colSpan="7" className="p-[10.8px] text-center text-[#212529] text-[12.96px]">
-                    Stock Quantity Bf : {transactions.length === 0 ? availableStock : openingBalance}
-                  </td>
-                </tr>
+            </thead>
+            <tbody>
+              {/* Stock Quantity Before (Opening Balance) Row */}
+              <tr className="bg-[#C0C0C0] border-t border-[#dee2e6]">
+                <td colSpan="7" className="p-[10.8px] text-center text-[#212529] text-[12.96px]">
+                  Stock Quantity Bf : {transactions.length === 0 ? availableStock : openingBalance}
+                </td>
+              </tr>
 
                 {transactions.length === 0 ? (
                   <tr className="bg-[#E9ECEF] border-t border-[#dee2e6]">
                     <td colSpan="7" className="p-[10.8px] text-center text-[#212529] text-[12.96px]">No Data Found</td>
                   </tr>
                 ) : (
-                  transactions.map((row, idx) => (
-                    <tr key={idx} className="border-t border-[#dee2e6]">
-                      <td className={idx % 2 === 0 ? "p-[10.8px] text-[#212529] text-[12.96px] border-r border-[#dee2e6] bg-[#F9F9F9]" : "p-[10.8px] text-[#212529] text-[12.96px] border-r border-[#dee2e6] bg-[#FFFFFF]"}>
-                        {new Date(row.invoicedate).toLocaleDateString()}
+                  <>
+                    {transactions.map((row, idx) => (
+                      <tr key={idx} className="border-t border-[#dee2e6]">
+                        <td className={idx % 2 === 0 ? "p-[10.8px] text-[#212529] text-[12.96px] border-r border-[#dee2e6] bg-[#F9F9F9]" : "p-[10.8px] text-[#212529] text-[12.96px] border-r border-[#dee2e6] bg-[#FFFFFF]"}>
+                          {formatDateTime(row.invoicedate)}
+                        </td>
+                        <td className={idx % 2 === 0 ? "p-[10.8px] text-[#212529] text-[12.96px] uppercase border-r border-[#dee2e6] bg-[#F9F9F9]" : "p-[10.8px] text-[#212529] text-[12.96px] uppercase border-r border-[#dee2e6] bg-[#FFFFFF]"}>
+                          {row.type || '-'}
+                        </td>
+                        <td className={idx % 2 === 0 ? "p-[10.8px] text-[#212529] text-[12.96px] border-r border-[#dee2e6] bg-[#F9F9F9]" : "p-[10.8px] text-[#212529] text-[12.96px] border-r border-[#dee2e6] bg-[#FFFFFF]"}>
+                          {row.purchaseqty || ''}
+                        </td>
+                        <td className={idx % 2 === 0 ? "p-[10.8px] text-[#212529] text-[12.96px] border-r border-[#dee2e6] bg-[#F9F9F9]" : "p-[10.8px] text-[#212529] text-[12.96px] border-r border-[#dee2e6] bg-[#FFFFFF]"}>
+                          {row.saleqty || ''}
+                        </td>
+                        <td className={idx % 2 === 0 ? "p-[10.8px] text-[#212529] text-[12.96px] border-r border-[#dee2e6] bg-[#F9F9F9]" : "p-[10.8px] text-[#212529] text-[12.96px] border-r border-[#dee2e6] bg-[#FFFFFF]"}>
+                          {row.purchase_returnqty || ''}
+                        </td>
+                        <td className={idx % 2 === 0 ? "p-[10.8px] text-[#212529] text-[12.96px] border-r border-[#dee2e6] bg-[#F9F9F9]" : "p-[10.8px] text-[#212529] text-[12.96px] border-r border-[#dee2e6] bg-[#FFFFFF]"}>
+                          {row.returnqty || ''}
+                        </td>
+                        <td className={idx % 2 === 0 ? "p-[10.8px] text-[#212529] text-[12.96px] bg-[#F9F9F9]" : "p-[10.8px] text-[#212529] text-[12.96px] bg-[#FFFFFF]"}>
+                          {row.created_by || '-'}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="bg-[#FFFFFF] border-t border-[#dee2e6]">
+                      <td colSpan="2" className="p-[10.8px] text-[#212529] text-[12.96px] text-right font-bold border-r border-[#dee2e6]">
+                        Total
                       </td>
-                      <td className={idx % 2 === 0 ? "p-[10.8px] text-[#212529] text-[12.96px] uppercase border-r border-[#dee2e6] bg-[#F9F9F9]" : "p-[10.8px] text-[#212529] text-[12.96px] uppercase border-r border-[#dee2e6] bg-[#FFFFFF]"}>
-                        {row.type || '-'}
+                      <td className="p-[10.8px] text-[#212529] text-[12.96px] font-bold border-r border-[#dee2e6]">
+                        {totalPurchase || 0}
                       </td>
-                      <td className={idx % 2 === 0 ? "p-[10.8px] text-[#212529] text-[12.96px] border-r border-[#dee2e6] bg-[#F9F9F9]" : "p-[10.8px] text-[#212529] text-[12.96px] border-r border-[#dee2e6] bg-[#FFFFFF]"}>
-                        {row.purchaseqty || ''}
+                      <td className="p-[10.8px] text-[#212529] text-[12.96px] font-bold border-r border-[#dee2e6]">
+                        {totalSale || 0}
                       </td>
-                      <td className={idx % 2 === 0 ? "p-[10.8px] text-[#212529] text-[12.96px] border-r border-[#dee2e6] bg-[#F9F9F9]" : "p-[10.8px] text-[#212529] text-[12.96px] border-r border-[#dee2e6] bg-[#FFFFFF]"}>
-                        {row.saleqty || ''}
+                      <td className="p-[10.8px] text-[#212529] text-[12.96px] font-bold border-r border-[#dee2e6]">
+                        {totalPurchaseReturn || 0}
                       </td>
-                      <td className={idx % 2 === 0 ? "p-[10.8px] text-[#212529] text-[12.96px] border-r border-[#dee2e6] bg-[#F9F9F9]" : "p-[10.8px] text-[#212529] text-[12.96px] border-r border-[#dee2e6] bg-[#FFFFFF]"}>
-                        {row.purchase_returnqty || ''}
+                      <td className="p-[10.8px] text-[#212529] text-[12.96px] font-bold border-r border-[#dee2e6]">
+                        {totalSaleReturn || 0}
                       </td>
-                      <td className={idx % 2 === 0 ? "p-[10.8px] text-[#212529] text-[12.96px] border-r border-[#dee2e6] bg-[#F9F9F9]" : "p-[10.8px] text-[#212529] text-[12.96px] border-r border-[#dee2e6] bg-[#FFFFFF]"}>
-                        {row.returnqty || ''}
+                      <td className="p-[10.8px] text-[#212529] text-[12.96px] border-r border-[#dee2e6]"></td>
+                    </tr>
+                    <tr className="bg-[#C0C0C0] border-t border-[#dee2e6]">
+                      <td colSpan="5" className="p-[10.8px] text-[#212529] text-[12.96px] text-right font-bold border-r border-[#dee2e6]">
+                        Stock Qty:
                       </td>
-                      <td className={idx % 2 === 0 ? "p-[10.8px] text-[#212529] text-[12.96px] bg-[#F9F9F9]" : "p-[10.8px] text-[#212529] text-[12.96px] bg-[#FFFFFF]"}>
-                        {new Date(row.created_date_time).toLocaleDateString()}
+                      <td colSpan="2" className="p-[10.8px] text-[#212529] text-[12.96px] text-left font-bold border-r border-[#dee2e6]">
+                        {finalStockQty}
                       </td>
                     </tr>
-                  ))
-                )}
-              </>
-            )}
-          </tbody>
-        </table>
+                  </>
+                  )}
+            </tbody>
+          </table>
       </div>
       
       {/* Footer pinned to bottom with small subtle font */}

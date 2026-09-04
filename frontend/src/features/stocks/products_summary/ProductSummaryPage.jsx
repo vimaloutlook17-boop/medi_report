@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import ToExcelButton from '../../../components/ToExcelButton';
+import Loader from '../../../components/Loader';
 import { useAuth } from '../../../AuthContext';
 import * as XLSX from 'xlsx';
 import NavigationTabs from '../../../components/NavigationTabs';
@@ -219,7 +220,7 @@ export default function ProductSummaryPage() {
             <option value="50">50</option>
             <option value="75">75</option>
             <option value="100">100</option>
-            <option value="1000000">All</option>
+            <option value="-1">All</option>
           </select>
 
           <div className="flex items-center ml-[10px]">
@@ -276,7 +277,12 @@ export default function ProductSummaryPage() {
       </div>
 
       {/* Data Table */}
-      <div className="mb-[20px] overflow-x-auto">
+      <div className="mb-[20px] overflow-x-auto relative min-h-[150px]">
+        {loading && (
+          <div className="absolute inset-0 bg-white/70 z-10 flex items-center justify-center">
+            <Loader />
+          </div>
+        )}
         <table className="w-full text-left border-collapse border border-[#dee2e6]">
           <thead>
             <tr className="bg-[#EEEEEE] border-b-[2px] border-[#dee2e6]">
@@ -286,11 +292,7 @@ export default function ProductSummaryPage() {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan="3" className="p-[10.8px] text-center text-[#212529] text-[12.96px]">Loading...</td>
-              </tr>
-            ) : data.length === 0 ? (
+            {data.length === 0 ? (
               <tr>
                 <td colSpan="3" className="p-[10.8px] text-center text-[#212529] text-[12.96px]">No products found.</td>
               </tr>
