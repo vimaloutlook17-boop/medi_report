@@ -7,6 +7,8 @@ import PaginationControls from '../../../components/PaginationControls';
 import { ApplyFilterButton, ResetButton } from '../../../components/FilterButtons';
 import ToPdfButton from '../../../components/ToPdfButton';
 import ToCsvButton from '../../../components/ToCsvButton';
+import { apiConfig } from '../../../config';
+
 
 export default function CollectionReportPage() {
   const { token } = useAuth();
@@ -207,7 +209,7 @@ export default function CollectionReportPage() {
     };
 
     try {
-      const response = await fetch('/api/reports/collection/', {
+      const response = await fetch(`${apiConfig.base_url}/reports/collection/`, {
         method: 'POST',
         headers: { 
 
@@ -297,7 +299,7 @@ export default function CollectionReportPage() {
         return;
       }
       try {
-        const res = await fetch('/api/reports/collection/search-users', {
+        const res = await fetch(`${apiConfig.base_url}/reports/collection/search-users`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -330,7 +332,7 @@ export default function CollectionReportPage() {
         return;
       }
       try {
-        const res = await fetch('/api/reports/collection/search-customers', {
+        const res = await fetch(`${apiConfig.base_url}/reports/collection/search-customers`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

@@ -5,9 +5,10 @@ import ToCsvButton from '../../../components/ToCsvButton';
 import ToExcelButton from '../../../components/ToExcelButton';
 import * as XLSX from 'xlsx';
 
-const API_BASE = '';
 
 import { useAuth } from '../../../AuthContext';
+import { apiConfig } from '../../../config';
+
 
 // Helper to format date as YYYY-MM-DD for HTML5 date inputs
 const formatDate = (d) => {
@@ -64,7 +65,7 @@ export default function ProductWiseUniqueCustomerList() {
   const searchItems = async (term) => {
     if (!token) return [];
     try {
-      const res = await fetch(`${API_BASE}/api/sales/product-wise-customer/search-items?term=${encodeURIComponent(term)}`, {
+      const res = await fetch(`${apiConfig.base_url}/sales/product-wise-customer/search-items?term=${encodeURIComponent(term)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -79,7 +80,7 @@ export default function ProductWiseUniqueCustomerList() {
   const searchPatients = async (term) => {
     if (!token) return [];
     try {
-      const res = await fetch(`${API_BASE}/api/sales/product-wise-customer/search-patients?term=${encodeURIComponent(term)}`, {
+      const res = await fetch(`${apiConfig.base_url}/sales/product-wise-customer/search-patients?term=${encodeURIComponent(term)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {

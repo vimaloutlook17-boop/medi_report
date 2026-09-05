@@ -5,6 +5,8 @@ import ToExcelButton from '../../../components/ToExcelButton';
 import Loader from '../../../components/Loader';
 import PaginationControls from '../../../components/PaginationControls';
 import { useAuth } from '../../../AuthContext';
+import { apiConfig } from '../../../config';
+
 
 const formatDateTime = (dateStr) => {
   if (!dateStr || String(dateStr).startsWith('0000-00-00')) return '-';
@@ -107,7 +109,7 @@ export default function ProductSummaryDetailsPage() {
 
     if (!id || !token) return;
     setLoading(true);
-    fetch(`/api/stocks/products-summary/?product_id=${id}&page=${page}&size=${size}`, {
+    fetch(`${apiConfig.base_url}/stocks/products-summary/?product_id=${id}&page=${page}&size=${size}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(res => res.json())
