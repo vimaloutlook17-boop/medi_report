@@ -124,19 +124,15 @@ async def fetch_product_summary(conn: Connection, shop_id: int, product_id: str,
         'sales' as type, (SELECT name FROM users WHERE id = bill_details.created_by) as created_by,
         NULL as returnqty, NULL as purchase_returnqty, MAX(bill_details.bill_date) as created_date_time
         FROM bill_details 
-        JOIN bill ON bill.bill_id = bill_details.bill_id 
         WHERE bill_details.item_id = %s {date_condition_bill} and bill_details.shop_id = %s 
-        AND bill.is_deleted = 'no' AND bill.status NOT LIKE 'Cancelled%%'
         GROUP BY DATE(bill_details.bill_date), bill_details.created_by
         UNION
         SELECT MAX(bill_details.bill_date) as invoicedate, 'Free Qty' as vendorname, NULL as purchaseqty, SUM(bill_details.free_qty) as saleqty, 
         'sales' as type, (SELECT name FROM users WHERE id = bill_details.created_by) as created_by,
         NULL as returnqty, NULL as purchase_returnqty, MAX(bill_details.bill_date) as created_date_time
         FROM bill_details 
-        JOIN bill ON bill.bill_id = bill_details.bill_id 
         WHERE bill_details.item_id = %s {date_condition_bill} and bill_details.shop_id = %s 
         AND bill_details.free_qty != 0
-        AND bill.is_deleted = 'no' AND bill.status NOT LIKE 'Cancelled%%'
         GROUP BY DATE(bill_details.bill_date), bill_details.created_by
         UNION
         SELECT date(stock_update.created_at) as invoicedate, 'Stock Update' as vendorname,
@@ -156,9 +152,7 @@ async def fetch_product_summary(conn: Connection, shop_id: int, product_id: str,
         'return' as type, (SELECT name FROM users WHERE id = bill_details.created_by) as created_by,
         SUM(returned_qty) as returnqty, NULL as purchase_returnqty, MAX(bill_details.created_at) as created_date_time
         FROM bill_details 
-        JOIN bill ON bill.bill_id = bill_details.bill_id 
         WHERE bill_details.item_id = %s {date_condition_bill} and bill_details.shop_id = %s AND bill_details.returned_qty != 0
-        AND bill.is_deleted = 'no' AND bill.status NOT LIKE 'Cancelled%%'
         GROUP BY DATE(bill_details.bill_date), bill_details.created_by
         ORDER BY created_date_time ASC
     """
@@ -235,15 +229,11 @@ async def fetch_product_summary(conn: Connection, shop_id: int, product_id: str,
             UNION ALL
             SELECT 0, SUM(bill_details.final_qty), 0, 0, 0, 0
             FROM bill_details 
-            JOIN bill ON bill.bill_id = bill_details.bill_id 
             WHERE bill_details.item_id = %s AND bill_details.shop_id = %s AND DATE(bill_details.bill_date) <= %s
-            AND bill.is_deleted = 'no' AND bill.status NOT LIKE 'Cancelled%%'
             UNION ALL
             SELECT 0, 0, SUM(bill_details.free_qty), 0, 0, 0
             FROM bill_details 
-            JOIN bill ON bill.bill_id = bill_details.bill_id 
             WHERE bill_details.item_id = %s AND bill_details.shop_id = %s AND bill_details.free_qty != 0 AND DATE(bill_details.bill_date) <= %s
-            AND bill.is_deleted = 'no' AND bill.status NOT LIKE 'Cancelled%%'
             UNION ALL
             SELECT 0, 0, 0, SUM(stock_update.diff_qty), 0, 0
             FROM stock_update 
@@ -251,9 +241,7 @@ async def fetch_product_summary(conn: Connection, shop_id: int, product_id: str,
             UNION ALL
             SELECT 0, 0, 0, 0, SUM(bill_details.returned_qty), 0
             FROM bill_details 
-            JOIN bill ON bill.bill_id = bill_details.bill_id 
             WHERE bill_details.item_id = %s AND bill_details.shop_id = %s AND bill_details.returned_qty != 0 AND DATE(bill_details.bill_date) <= %s
-            AND bill.is_deleted = 'no' AND bill.status NOT LIKE 'Cancelled%'
             UNION ALL
             SELECT 0, 0, 0, 0, 0, SUM(purchase_return_entry.return_qty)
             FROM purchase_return_entry 

@@ -6,9 +6,10 @@ import ToCsvButton from '../../../components/ToCsvButton';
 import ToExcelButton from '../../../components/ToExcelButton';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../../AuthContext';
+import { apiConfig } from '../../../config';
 
 
-const API_BASE = '';
+
 
 
 
@@ -80,7 +81,7 @@ export default function ProductWiseCustomerList() {
   const searchItems = async (term) => {
     if (!token) return [];
     try {
-      const res = await fetch(`${API_BASE}/api/sales/product-wise-customer/search-items?term=${encodeURIComponent(term)}`, {
+      const res = await fetch(`${apiConfig.base_url}/sales/product-wise-customer/search-items?term=${encodeURIComponent(term)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -95,7 +96,7 @@ export default function ProductWiseCustomerList() {
   const searchPatients = async (term) => {
     if (!token) return [];
     try {
-      const res = await fetch(`${API_BASE}/api/sales/product-wise-customer/search-patients?term=${encodeURIComponent(term)}`, {
+      const res = await fetch(`${apiConfig.base_url}/sales/product-wise-customer/search-patients?term=${encodeURIComponent(term)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -134,7 +135,7 @@ export default function ProductWiseCustomerList() {
       if (toD) params.append('tdate', toD);
       if (patientSearch) params.append('customer_name', patientSearch);
 
-      const res = await fetch(`${API_BASE}/api/sales/product-wise-customer/?${params.toString()}`, {
+      const res = await fetch(`${apiConfig.base_url}/sales/product-wise-customer/?${params.toString()}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {

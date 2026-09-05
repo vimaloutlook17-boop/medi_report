@@ -58,7 +58,7 @@ async def get_master_list(
     try:
         async with db.cursor() as cur:
             if search:
-                await cur.execute("SELECT COUNT(*) as total FROM item WHERE shop_id = %s AND name = %s", (shop_id, search))
+                await cur.execute("SELECT COUNT(*) as total FROM item WHERE shop_id = %s AND name LIKE %s", (shop_id, f"%{search}%"))
             else:
                 await cur.execute("SELECT COUNT(*) as total FROM item WHERE shop_id = %s", (shop_id,))
                 

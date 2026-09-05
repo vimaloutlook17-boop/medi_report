@@ -6,6 +6,8 @@ import { useAuth } from '../../../AuthContext';
 import * as XLSX from 'xlsx';
 import NavigationTabs from '../../../components/NavigationTabs';
 import PaginationControls from '../../../components/PaginationControls';
+import { apiConfig } from '../../../config';
+
 
 export default function ProductSummaryPage() {
   const { token } = useAuth();
@@ -34,7 +36,7 @@ export default function ProductSummaryPage() {
   useEffect(() => {
     if (!token) return;
     // Fetch dropdown products dynamically
-    fetch(`/api/stocks/products-summary/products`, {
+    fetch(`${apiConfig.base_url}/stocks/products-summary/products`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(res => res.json())
