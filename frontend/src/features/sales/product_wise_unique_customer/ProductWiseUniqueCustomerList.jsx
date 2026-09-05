@@ -1,14 +1,12 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import PaginationControls from '../../../components/PaginationControls';
+import { ApplyFilterButton, ResetButton } from '../../../components/FilterButtons';
 import SearchableSelect from '../../../components/SearchableSelect';
 import ToCsvButton from '../../../components/ToCsvButton';
 import ToExcelButton from '../../../components/ToExcelButton';
 import * as XLSX from 'xlsx';
-
-
 import { useAuth } from '../../../AuthContext';
 import { apiConfig } from '../../../config';
-
 
 // Helper to format date as YYYY-MM-DD for HTML5 date inputs
 const formatDate = (d) => {
@@ -53,19 +51,31 @@ const getDateRangeForFilter = (filter) => {
 };
 
 export default function ProductWiseUniqueCustomerList() {
-  // Filter States
-  const [selectedItem, setSelectedItem] = useState('');
-  const [patientName, setPatientName] = useState('');
-  const [dateFilter, setDateFilter] = useState('Today');
-  const [fromDate, setFromDate] = useState(() => formatDate(new Date()));
-  const [toDate, setToDate] = useState(() => formatDate(new Date()));
-
   const { token } = useAuth();
 
+  // Filter States
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [patientName, setPatientName] = useState(null);
+  const [dateFilter, setDateFilter] = useState('Custom Date');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+
+  // Pagination & Table States
+  const [recordsPerPage, setRecordsPerPage] = useState('10');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sortField, setSortField] = useState('customer_name');
+  const [sortOrder, setSortOrder] = useState('asc');
+
+  // Data rows
+  const [data, setData] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Search API functions for autocompletion
   const searchItems = async (term) => {
     if (!token) return [];
     try {
-      const res = await fetch(`${apiConfig.base_url}/sales/product-wise-customer/search-items?term=${encodeURIComponent(term)}`, {
+      const res = await fetch(`${apiConfig.base_url}/sales/product-wise-unique-customer/search-items?term=${encodeURIComponent(term)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -80,7 +90,7 @@ export default function ProductWiseUniqueCustomerList() {
   const searchPatients = async (term) => {
     if (!token) return [];
     try {
-      const res = await fetch(`${apiConfig.base_url}/sales/product-wise-customer/search-patients?term=${encodeURIComponent(term)}`, {
+      const res = await fetch(`${apiConfig.base_url}/sales/product-wise-unique-customer/search-patients?term=${encodeURIComponent(term)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -92,17 +102,6 @@ export default function ProductWiseUniqueCustomerList() {
     return [];
   };
 
-  // Pagination & Table States
-  const [recordsPerPage, setRecordsPerPage] = useState('10');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [sortField, setSortField] = useState('');
-  const [sortOrder, setSortOrder] = useState('asc');
-
-  // Data rows
-  const [data, setData] = useState([]);
-
-  const totalCount = data.length;
-
   const handleDateFilterChange = (newFilter) => {
     setDateFilter(newFilter);
     const range = getDateRangeForFilter(newFilter);
@@ -112,28 +111,88 @@ export default function ProductWiseUniqueCustomerList() {
     }
   };
 
+  const fetchReportData = useCallback(async (
+    page = currentPage,
+    size = recordsPerPage,
+    sort = sortField,
+    order = sortOrder,
+    item = selectedItem,
+    fromD = fromDate,
+    toD = toDate,
+    cust = patientName
+  ) => {
+    if (!token) return;
+    const itemId = typeof item === 'object' ? item?.id : item;
+    setIsLoading(true);
+    try {
+      const patientSearch = typeof cust === 'object' ? cust?.name : cust;
+      const querySize = String(size).toLowerCase() === 'all' ? '10000' : String(size);
+      const params = new URLSearchParams({
+        page: String(Math.max(0, page - 1)),
+        size: querySize,
+        sort_field: sort || 'customer_name',
+        sort_order: order || 'asc'
+      });
+      if (itemId) params.append('item_id', String(itemId));
+      if (fromD) params.append('fdate', fromD);
+      if (toD) params.append('tdate', toD);
+      if (patientSearch) params.append('patient_name', patientSearch);
+
+      const res = await fetch(`${apiConfig.base_url}/sales/product-wise-unique-customer/?${params.toString()}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setData(json.result || []);
+        setTotalCount(json.count || 0);
+      }
+    } catch (err) {
+      console.error('Error fetching unique customer report data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token, currentPage, recordsPerPage, sortField, sortOrder, selectedItem, fromDate, toDate, patientName]);
+
+  // Load initial unique customer data dynamically on mount
+  useEffect(() => {
+    if (!token) return;
+    fetchReportData(1, 10, 'customer_name', 'asc', null, '', '');
+  }, [token]);
+
+  const handleApplyFilters = () => {
+    setCurrentPage(1);
+    fetchReportData(1, recordsPerPage, sortField, sortOrder);
+  };
+
   const handleReset = () => {
     const todayStr = formatDate(new Date());
-    setSelectedItem('');
-    setPatientName('');
+    setSelectedItem(null);
+    setPatientName(null);
     setDateFilter('Today');
     setFromDate(todayStr);
     setToDate(todayStr);
     setData([]);
+    setTotalCount(0);
     setCurrentPage(1);
-  };
-
-  const handleApplyFilters = () => {
-    console.log('Applying filters:', { selectedItem, patientName, dateFilter, fromDate, toDate });
+    fetchReportData(1, recordsPerPage, 'customer_name', 'asc', null, todayStr, todayStr, null);
   };
 
   const handleSort = (field) => {
-    if (sortField === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortOrder('asc');
-    }
+    const newOrder = sortField === field && sortOrder === 'asc' ? 'desc' : 'asc';
+    setSortField(field);
+    setSortOrder(newOrder);
+    fetchReportData(currentPage, recordsPerPage, field, newOrder);
+  };
+
+  const handlePageChange = (newPage) => {
+    setCurrentPage(newPage);
+    fetchReportData(newPage, recordsPerPage, sortField, sortOrder);
+  };
+
+  const handleRecordsPerPageChange = (newSize) => {
+    setRecordsPerPage(newSize);
+    setCurrentPage(1);
+    fetchReportData(1, newSize, sortField, sortOrder);
   };
 
   const renderSortIcon = (field) => {
@@ -154,7 +213,7 @@ export default function ProductWiseUniqueCustomerList() {
     }
     const headers = ['S.No', 'UHID/Patient ID', 'Patient Name', 'Mobile No', 'Age', 'Address'];
     const rows = data.map((item, index) => [
-      index + 1,
+      (currentPage - 1) * Number(recordsPerPage === 'All' ? 0 : recordsPerPage) + index + 1,
       `"${item.uhid || ''}"`,
       `"${item.patientName || ''}"`,
       `"${item.mobile || ''}"`,
@@ -177,7 +236,7 @@ export default function ProductWiseUniqueCustomerList() {
       return;
     }
     const exportData = data.map((item, index) => ({
-      'S.No': index + 1,
+      'S.No': (currentPage - 1) * Number(recordsPerPage === 'All' ? 0 : recordsPerPage) + index + 1,
       'UHID/Patient ID': item.uhid || '',
       'Patient Name': item.patientName || '',
       'Mobile No': item.mobile || '',
@@ -231,9 +290,9 @@ export default function ProductWiseUniqueCustomerList() {
             alignItems: 'center',
             gap: '6px',
             color: '#212529',
-            fontSize: '12.96px',
+            fontSize: '14px',
             lineHeight: '19.44px',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+            fontFamily: 'Arial, sans-serif',
             margin: '0px 0px 8px 0px',
             fontWeight: '600',
           }}
@@ -254,7 +313,7 @@ export default function ProductWiseUniqueCustomerList() {
           }}
         >
           {/* Select Item */}
-          <div className="flex-1 min-w-[180px]">
+          <div className="shrink-0" style={{ flex: 1, minWidth: '200px' }}>
             <SearchableSelect
               id="select2-item_value-container"
               label="Select Item"
@@ -268,7 +327,7 @@ export default function ProductWiseUniqueCustomerList() {
           </div>
 
           {/* Patient Name */}
-          <div className="flex-1 min-w-[180px]">
+          <div className="shrink-0" style={{ flex: 1, minWidth: '200px' }}>
             <SearchableSelect
               id="select2-search_customer_name-container"
               label="Patient Name"
@@ -282,7 +341,7 @@ export default function ProductWiseUniqueCustomerList() {
           </div>
 
           {/* Date Filter */}
-          <div className="w-[140px] shrink-0">
+          <div className="shrink-0" style={{ width: '198px' }}>
             <label
               htmlFor="selector"
               style={{
@@ -307,7 +366,7 @@ export default function ProductWiseUniqueCustomerList() {
                   fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
                   fontSize: '14.4px',
                   backgroundColor: '#FFFFFF',
-                  padding: '4px 24px 4px 10.8px',
+                  padding: '4px 6px',
                   height: '35px',
                   border: '1px solid #ced4da',
                   borderRadius: '4px',
@@ -433,55 +492,10 @@ export default function ProductWiseUniqueCustomerList() {
           </div>
 
           {/* Apply Filters Button */}
-          <button
-            id="applyFilterBtn"
-            className="btn btn-primary shrink-0 flex items-center justify-center gap-1.5 font-normal"
-            onClick={handleApplyFilters}
-            style={{
-              color: '#FFFFFF',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-              fontSize: '14.4px',
-              backgroundColor: '#007BFF',
-              padding: '4px 10.8px',
-              height: '35px',
-              border: '1px solid transparent',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              outline: 'none',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <svg className="w-3.5 h-3.5 fill-white" viewBox="0 0 24 24">
-              <path d="M2.5 4C2.5 3.44772 2.94772 3 3.5 3H20.5C21.0523 3 21.5 3.44772 21.5 4C21.5 4.30472 21.3638 4.5936 21.1287 4.7876L14.5 10.25V18.25C14.5 18.5724 14.3444 18.8724 14.0799 19.0601L10.5799 21.5601C10.0984 21.904 9.5 21.5594 9.5 20.9702V10.25L2.87132 4.7876C2.63616 4.5936 2.5 4.30472 2.5 4Z" />
-            </svg>
-            <span>Apply Filters</span>
-          </button>
+          <ApplyFilterButton onClick={handleApplyFilters} />
 
           {/* Reset Button */}
-          <button
-            id="clearFilterBtn"
-            className="btn btn-secondary shrink-0 flex items-center justify-center gap-1.5 font-normal"
-            onClick={handleReset}
-            style={{
-              color: '#FFFFFF',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-              fontSize: '14.4px',
-              backgroundColor: '#6C757D',
-              padding: '4px 10.8px',
-              height: '35px',
-              border: '1px solid transparent',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              outline: 'none',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-              <path d="M3 3v5h5" />
-            </svg>
-            <span>Reset</span>
-          </button>
+          <ResetButton onClick={handleReset} />
         </div>
       </div>
 
@@ -496,7 +510,7 @@ export default function ProductWiseUniqueCustomerList() {
           padding: '0px 15px',
         }}
       >
-        {/* Control Toolbar Row (div.row) */}
+        {/* Control Toolbar Row */}
         <div
           className="row flex flex-nowrap items-center w-full"
           style={{
@@ -542,7 +556,7 @@ export default function ProductWiseUniqueCustomerList() {
                 id="pagesize"
                 className="form-control-sm custom-select pagesize"
                 value={recordsPerPage}
-                onChange={(e) => setRecordsPerPage(e.target.value)}
+                onChange={(e) => handleRecordsPerPageChange(e.target.value)}
                 style={{
                   width: '61.6px',
                   height: '34.4px',
@@ -582,136 +596,12 @@ export default function ProductWiseUniqueCustomerList() {
             </div>
           </div>
 
-          {/* Left Arrow Pair */}
-          <div
-            className="flex items-center shrink-0"
-            style={{ marginLeft: '30px' }}
-          >
-            <div
-              className="flex items-center rounded overflow-hidden shadow-xs"
-              style={{
-                width: '49.89px',
-                height: '27.7px',
-                backgroundColor: '#8d9aa6',
-                borderRadius: '4px',
-              }}
-            >
-              {/* First Page (<<) */}
-              <button
-                disabled={currentPage === 1 || totalCount === 0 || recordsPerPage === 'All'}
-                onClick={() => setCurrentPage(1)}
-                className="hover:bg-[#7b8894] disabled:opacity-85 flex items-center justify-center transition-colors h-full"
-                style={{
-                  width: '24.44px',
-                  height: '27.7px',
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  padding: 0,
-                }}
-                title="First Page"
-              >
-                <svg width="11" height="11" viewBox="0 0 11 11" fill="white">
-                  <path d="M5.5 1L0.5 5.5L5.5 10V1ZM10.5 1L5.5 5.5L10.5 10V1Z" />
-                </svg>
-              </button>
-              {/* Divider */}
-              <div style={{ width: '1px', height: '14px', backgroundColor: '#6c7985' }}></div>
-              {/* Prev Page (<) */}
-              <button
-                disabled={currentPage === 1 || totalCount === 0 || recordsPerPage === 'All'}
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                className="hover:bg-[#7b8894] disabled:opacity-85 flex items-center justify-center transition-colors h-full"
-                style={{
-                  width: '24.44px',
-                  height: '27.7px',
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  padding: 0,
-                }}
-                title="Previous Page"
-              >
-                <svg width="6" height="11" viewBox="0 0 6 11" fill="white">
-                  <path d="M5.5 1L0.5 5.5L5.5 10V1Z" />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          {/* Page Status */}
-          <span
-            id="get_items5_pager_info"
-            className="pagedisplay select-none font-bold shrink-0 flex items-center"
-            style={{
-              color: '#212529',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-              fontSize: '12.96px',
-              padding: '0px 10px',
-              whiteSpace: 'nowrap',
-              margin: 0,
-            }}
-          >
-            {recordsPerPage === 'All'
-              ? (totalCount === 0 ? '0 to 0 (0)' : `1 to ${totalCount} (${totalCount})`)
-              : (totalCount === 0 ? '0 to 0 (0)' : `${(currentPage - 1) * Number(recordsPerPage) + 1} to ${Math.min(currentPage * Number(recordsPerPage), totalCount)} (${totalCount})`)}
-          </span>
-
-          {/* Right Arrow Pair */}
-          <div
-            className="flex items-center shrink-0"
-          >
-            <div
-              className="flex items-center rounded overflow-hidden shadow-xs"
-              style={{
-                width: '49.89px',
-                height: '27.7px',
-                backgroundColor: '#8d9aa6',
-                borderRadius: '4px',
-              }}
-            >
-              {/* Next Page (>) */}
-              <button
-                disabled={totalCount === 0 || recordsPerPage === 'All' || currentPage * Number(recordsPerPage) >= totalCount}
-                onClick={() => setCurrentPage((p) => p + 1)}
-                className="hover:bg-[#7b8894] disabled:opacity-85 flex items-center justify-center transition-colors h-full"
-                style={{
-                  width: '24.44px',
-                  height: '27.7px',
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  padding: 0,
-                }}
-                title="Next Page"
-              >
-                <svg width="6" height="11" viewBox="0 0 6 11" fill="white">
-                  <path d="M0.5 1L5.5 5.5L0.5 10V1Z" />
-                </svg>
-              </button>
-              {/* Divider */}
-              <div style={{ width: '1px', height: '14px', backgroundColor: '#6c7985' }}></div>
-              {/* Last Page (>>) */}
-              <button
-                disabled={totalCount === 0 || recordsPerPage === 'All' || currentPage * Number(recordsPerPage) >= totalCount}
-                onClick={() => setCurrentPage(Math.ceil(totalCount / Number(recordsPerPage)) || 1)}
-                className="hover:bg-[#7b8894] disabled:opacity-85 flex items-center justify-center transition-colors h-full"
-                style={{
-                  width: '24.44px',
-                  height: '27.7px',
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  padding: 0,
-                }}
-                title="Last Page"
-              >
-                <svg width="11" height="11" viewBox="0 0 11 11" fill="white">
-                  <path d="M0.5 1L5.5 5.5L0.5 10V1ZM5.5 1L10.5 5.5L5.5 10V1Z" />
-                </svg>
-              </button>
-            </div>
-          </div>
+          <PaginationControls 
+            page={currentPage - 1} 
+            setPage={(p) => handlePageChange(p + 1)} 
+            size={recordsPerPage === 'All' ? 1000000 : Number(recordsPerPage)} 
+            totalCount={totalCount} 
+          />
 
           {/* Export to CSV */}
           <ToCsvButton className="ml-[16px]" onClick={exportToCSV} />
@@ -722,190 +612,200 @@ export default function ProductWiseUniqueCustomerList() {
 
         {/* Main Data Table */}
         <div className="border border-[#dee2e6] rounded overflow-hidden">
-        <table className="w-full border-collapse text-left">
-          <thead>
-            <tr className="bg-[#EEEEEE] text-[#212529] font-bold border-b border-[#dee2e6]">
-              {/* S.No */}
-              <th className="border-r border-[#dee2e6] p-0 text-center font-bold" style={{ width: '5%', minWidth: '55px', height: '38px' }}>
-                <div
-                  className="tablesorter-header-inner"
-                  style={{
-                    color: '#212529',
-                    fontFamily: 'Arial, sans-serif',
-                    fontSize: '13.5px',
-                    padding: '8px 4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: '38px',
-                  }}
-                >
-                  S.No
-                </div>
-              </th>
-
-              {/* UHID/Patient ID */}
-              <th
-                className="border-r border-[#dee2e6] p-0 cursor-pointer select-none font-bold"
-                onClick={() => handleSort('uhid')}
-                style={{ width: '16%', minWidth: '150px', height: '38px' }}
-              >
-                <div
-                  className="tablesorter-header-inner"
-                  style={{
-                    color: '#212529',
-                    fontFamily: 'Arial, sans-serif',
-                    fontSize: '13.5px',
-                    padding: '8px 24px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: '38px',
-                    position: 'relative',
-                    textAlign: 'center',
-                  }}
-                >
-                  <span>UHID/Patient ID</span>
-                  <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
-                    {renderSortIcon('uhid')}
+          <table className="w-full border-collapse text-left">
+            <thead>
+              <tr className="bg-[#EEEEEE] text-[#212529] font-bold border-b border-[#dee2e6]">
+                {/* S.No */}
+                <th className="border-r border-[#dee2e6] p-0 text-center font-bold" style={{ width: '5%', minWidth: '55px', height: '38px' }}>
+                  <div
+                    className="tablesorter-header-inner"
+                    style={{
+                      color: '#212529',
+                      fontFamily: 'Arial, sans-serif',
+                      fontSize: '13.5px',
+                      padding: '8px 4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: '38px',
+                    }}
+                  >
+                    S.No
                   </div>
-                </div>
-              </th>
+                </th>
 
-              {/* Patient Name */}
-              <th
-                className="border-r border-[#dee2e6] p-0 cursor-pointer select-none font-bold"
-                onClick={() => handleSort('patientName')}
-                style={{ width: '32%', minWidth: '240px', height: '38px' }}
-              >
-                <div
-                  className="tablesorter-header-inner"
-                  style={{
-                    color: '#212529',
-                    fontFamily: 'Arial, sans-serif',
-                    fontSize: '13.5px',
-                    padding: '8px 24px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: '38px',
-                    position: 'relative',
-                    textAlign: 'center',
-                  }}
+                {/* UHID/Patient ID */}
+                <th
+                  className="border-r border-[#dee2e6] p-0 cursor-pointer select-none font-bold"
+                  onClick={() => handleSort('uhid')}
+                  style={{ width: '16%', minWidth: '150px', height: '38px' }}
                 >
-                  <span>Patient Name</span>
-                  <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
-                    {renderSortIcon('patientName')}
+                  <div
+                    className="tablesorter-header-inner"
+                    style={{
+                      color: '#212529',
+                      fontFamily: 'Arial, sans-serif',
+                      fontSize: '13.5px',
+                      padding: '8px 24px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: '38px',
+                      position: 'relative',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <span>UHID/Patient ID</span>
+                    <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
+                      {renderSortIcon('uhid')}
+                    </div>
                   </div>
-                </div>
-              </th>
+                </th>
 
-              {/* Mobile No */}
-              <th
-                className="border-r border-[#dee2e6] p-0 cursor-pointer select-none font-bold"
-                onClick={() => handleSort('mobile')}
-                style={{ width: '15%', minWidth: '130px', height: '38px' }}
-              >
-                <div
-                  className="tablesorter-header-inner"
-                  style={{
-                    color: '#212529',
-                    fontFamily: 'Arial, sans-serif',
-                    fontSize: '13.5px',
-                    padding: '8px 12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: '38px',
-                    textAlign: 'center',
-                  }}
+                {/* Patient Name */}
+                <th
+                  className="border-r border-[#dee2e6] p-0 cursor-pointer select-none font-bold"
+                  onClick={() => handleSort('customer_name')}
+                  style={{ width: '32%', minWidth: '240px', height: '38px' }}
                 >
-                  <span>Mobile No</span>
-                </div>
-              </th>
-
-              {/* Age */}
-              <th
-                className="border-r border-[#dee2e6] p-0 cursor-pointer select-none font-bold"
-                onClick={() => handleSort('age')}
-                style={{ width: '8%', minWidth: '75px', height: '38px' }}
-              >
-                <div
-                  className="tablesorter-header-inner"
-                  style={{
-                    color: '#212529',
-                    fontFamily: 'Arial, sans-serif',
-                    fontSize: '13.5px',
-                    padding: '8px 20px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: '38px',
-                    position: 'relative',
-                    textAlign: 'center',
-                  }}
-                >
-                  <span>Age</span>
-                  <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
-                    {renderSortIcon('age')}
+                  <div
+                    className="tablesorter-header-inner"
+                    style={{
+                      color: '#212529',
+                      fontFamily: 'Arial, sans-serif',
+                      fontSize: '13.5px',
+                      padding: '8px 24px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: '38px',
+                      position: 'relative',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <span>Patient Name</span>
+                    <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
+                      {renderSortIcon('customer_name')}
+                    </div>
                   </div>
-                </div>
-              </th>
+                </th>
 
-              {/* Address */}
-              <th
-                className="p-0 cursor-pointer select-none font-bold"
-                onClick={() => handleSort('address')}
-                style={{ width: '24%', minWidth: '200px', height: '38px' }}
-              >
-                <div
-                  className="tablesorter-header-inner"
-                  style={{
-                    color: '#212529',
-                    fontFamily: 'Arial, sans-serif',
-                    fontSize: '13.5px',
-                    padding: '8px 24px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: '38px',
-                    position: 'relative',
-                    textAlign: 'center',
-                  }}
+                {/* Mobile No */}
+                <th
+                  className="border-r border-[#dee2e6] p-0 cursor-pointer select-none font-bold"
+                  onClick={() => handleSort('mobile')}
+                  style={{ width: '15%', minWidth: '130px', height: '38px' }}
                 >
-                  <span>Address</span>
-                  <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
-                    {renderSortIcon('address')}
+                  <div
+                    className="tablesorter-header-inner"
+                    style={{
+                      color: '#212529',
+                      fontFamily: 'Arial, sans-serif',
+                      fontSize: '13.5px',
+                      padding: '8px 12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: '38px',
+                      position: 'relative',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <span>Mobile No</span>
+                    <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
+                      {renderSortIcon('mobile')}
+                    </div>
                   </div>
-                </div>
-              </th>
-            </tr>
-          </thead>
+                </th>
 
-          <tbody>
-            {data.length === 0 ? (
-              <tr className="bg-white">
-                <td colSpan={6} className="py-6 text-center text-[13px] text-[#495057] font-normal">
-                  No Data Found
-                </td>
+                {/* Age */}
+                <th
+                  className="border-r border-[#dee2e6] p-0 cursor-pointer select-none font-bold"
+                  onClick={() => handleSort('age')}
+                  style={{ width: '8%', minWidth: '75px', height: '38px' }}
+                >
+                  <div
+                    className="tablesorter-header-inner"
+                    style={{
+                      color: '#212529',
+                      fontFamily: 'Arial, sans-serif',
+                      fontSize: '13.5px',
+                      padding: '8px 20px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: '38px',
+                      position: 'relative',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <span>Age</span>
+                    <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
+                      {renderSortIcon('age')}
+                    </div>
+                  </div>
+                </th>
+
+                {/* Address */}
+                <th
+                  className="p-0 cursor-pointer select-none font-bold"
+                  onClick={() => handleSort('address')}
+                  style={{ width: '24%', minWidth: '200px', height: '38px' }}
+                >
+                  <div
+                    className="tablesorter-header-inner"
+                    style={{
+                      color: '#212529',
+                      fontFamily: 'Arial, sans-serif',
+                      fontSize: '13.5px',
+                      padding: '8px 24px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: '38px',
+                      position: 'relative',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <span>Address</span>
+                    <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
+                      {renderSortIcon('address')}
+                    </div>
+                  </div>
+                </th>
               </tr>
-            ) : (
-              data.map((row, index) => (
-                <tr key={index} className="border-b border-[#dee2e6] hover:bg-gray-50">
-                  <td className="py-2.5 px-3 text-center text-gray-600 border-r border-[#dee2e6]">
-                    {recordsPerPage === 'All' ? index + 1 : (currentPage - 1) * Number(recordsPerPage) + index + 1}
+            </thead>
+
+            <tbody>
+              {isLoading ? (
+                <tr className="bg-white">
+                  <td colSpan={6} className="py-8 text-center text-[13.5px] text-[#0052cc] font-medium">
+                    Loading data...
                   </td>
-                  <td className="py-2.5 px-3 text-gray-700 font-medium border-r border-[#dee2e6]">{row.uhid}</td>
-                  <td className="py-2.5 px-4 text-gray-800 border-r border-[#dee2e6]">{row.patientName}</td>
-                  <td className="py-2.5 px-3 text-gray-600 border-r border-[#dee2e6]">{row.mobile}</td>
-                  <td className="py-2.5 px-3 text-center text-gray-700 border-r border-[#dee2e6]">{row.age}</td>
-                  <td className="py-2.5 px-3 text-gray-600">{row.address}</td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ) : data.length === 0 ? (
+                <tr className="bg-white">
+                  <td colSpan={6} className="py-6 text-center text-[13px] text-[#495057] font-normal">
+                    No Data Found
+                  </td>
+                </tr>
+              ) : (
+                data.map((row, index) => (
+                  <tr key={index} className="border-b border-[#dee2e6] hover:bg-gray-50">
+                    <td className="py-2.5 px-3 text-center text-gray-600 border-r border-[#dee2e6]">
+                      {recordsPerPage === 'All' ? index + 1 : (currentPage - 1) * Number(recordsPerPage) + index + 1}
+                    </td>
+                    <td className="py-2.5 px-3 text-gray-700 font-medium border-r border-[#dee2e6]">{row.uhid}</td>
+                    <td className="py-2.5 px-4 text-gray-800 border-r border-[#dee2e6]">{row.patientName}</td>
+                    <td className="py-2.5 px-3 text-gray-600 border-r border-[#dee2e6]">{row.mobile}</td>
+                    <td className="py-2.5 px-3 text-center text-gray-700 border-r border-[#dee2e6]">{row.age}</td>
+                    <td className="py-2.5 px-3 text-gray-600">{row.address}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Footer pinned to bottom with small subtle font */}

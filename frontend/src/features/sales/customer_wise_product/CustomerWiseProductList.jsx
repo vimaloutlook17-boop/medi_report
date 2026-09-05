@@ -1,28 +1,82 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import PaginationControls from '../../../components/PaginationControls';
+import { ApplyFilterButton, ResetButton } from '../../../components/FilterButtons';
 import SearchableSelect from '../../../components/SearchableSelect';
 import ToCsvButton from '../../../components/ToCsvButton';
 import ToExcelButton from '../../../components/ToExcelButton';
 import * as XLSX from 'xlsx';
-
-
 import { useAuth } from '../../../AuthContext';
 import { apiConfig } from '../../../config';
 
+// Helper to format date as YYYY-MM-DD for HTML5 date inputs
+const formatDate = (d) => {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+const getDateRangeForFilter = (filter) => {
+  const today = new Date();
+  switch (filter) {
+    case 'Today':
+      return { from: formatDate(today), to: formatDate(today) };
+    case 'Yesterday': {
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      return { from: formatDate(yesterday), to: formatDate(yesterday) };
+    }
+    case 'Last 7 Days': {
+      const past7 = new Date(today);
+      past7.setDate(past7.getDate() - 6);
+      return { from: formatDate(past7), to: formatDate(today) };
+    }
+    case 'Current Month': {
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+      return { from: formatDate(firstDay), to: formatDate(today) };
+    }
+    case 'Last Month': {
+      const firstDayLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const lastDayLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+      return { from: formatDate(firstDayLastMonth), to: formatDate(lastDayLastMonth) };
+    }
+    case 'Last 3 Months': {
+      const past3Months = new Date(today.getFullYear(), today.getMonth() - 2, 1);
+      return { from: formatDate(past3Months), to: formatDate(today) };
+    }
+    case 'Custom Date':
+    default:
+      return null;
+  }
+};
 
 export default function CustomerWiseProductList() {
-  const [selectedItem, setSelectedItem] = useState('');
-  const [patientName, setPatientName] = useState('');
-  const [dateFilter, setDateFilter] = useState('Today');
-  const [fromDate, setFromDate] = useState('2026-09-01');
-  const [toDate, setToDate] = useState('2026-09-01');
-
   const { token } = useAuth();
 
+  // Filter States
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [patientName, setPatientName] = useState(null);
+  const [dateFilter, setDateFilter] = useState('Custom Date');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+
+  // Pagination & Table States
+  const [recordsPerPage, setRecordsPerPage] = useState('10');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sortField, setSortField] = useState('created_at');
+  const [sortOrder, setSortOrder] = useState('desc');
+
+  // Data rows
+  const [data, setData] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalQuantity, setTotalQuantity] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Search API functions for autocompletion
   const searchItems = async (term) => {
     if (!token) return [];
     try {
-      const res = await fetch(`${apiConfig.base_url}/sales/product-wise-customer/search-items?term=${encodeURIComponent(term)}`, {
+      const res = await fetch(`${apiConfig.base_url}/sales/customer-wise-product/search-items?term=${encodeURIComponent(term)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -37,7 +91,7 @@ export default function CustomerWiseProductList() {
   const searchPatients = async (term) => {
     if (!token) return [];
     try {
-      const res = await fetch(`${apiConfig.base_url}/sales/product-wise-customer/search-patients?term=${encodeURIComponent(term)}`, {
+      const res = await fetch(`${apiConfig.base_url}/sales/customer-wise-product/search-patients?term=${encodeURIComponent(term)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -49,98 +103,113 @@ export default function CustomerWiseProductList() {
     return [];
   };
 
-  // Filter application state
-  const [appliedFilters, setAppliedFilters] = useState({
-    item: '',
-    patient: '',
-    dateFilter: 'Today',
-    from: '2026-09-01',
-    to: '2026-09-01',
-  });
+  const handleDateFilterChange = (newFilter) => {
+    setDateFilter(newFilter);
+    const range = getDateRangeForFilter(newFilter);
+    if (range) {
+      setFromDate(range.from);
+      setToDate(range.to);
+    }
+  };
 
-  // Table state
-  const [data, setData] = useState([]);
-  const [recordsPerPage, setRecordsPerPage] = useState('10');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [sortColumn, setSortColumn] = useState('');
-  const [sortDirection, setSortDirection] = useState('asc');
+  const fetchReportData = useCallback(async (
+    page = currentPage,
+    size = recordsPerPage,
+    sort = sortField,
+    order = sortOrder,
+    item = selectedItem,
+    fromD = fromDate,
+    toD = toDate,
+    cust = patientName
+  ) => {
+    if (!token) return;
+    const itemId = typeof item === 'object' ? item?.id : item;
+    const customerId = typeof cust === 'object' ? cust?.id : null;
+    const customerSearch = typeof cust === 'object' ? cust?.name : cust;
+    setIsLoading(true);
+    try {
+      const querySize = String(size).toLowerCase() === 'all' ? '10000' : String(size);
+      const params = new URLSearchParams({
+        page: String(Math.max(0, page - 1)),
+        size: querySize,
+        sort_field: sort || 'created_at',
+        sort_order: order || 'desc'
+      });
+      if (customerId) params.append('customer_id', String(customerId));
+      if (customerSearch) params.append('customer_name', customerSearch);
+      if (itemId) params.append('item_id', String(itemId));
+      if (fromD) params.append('fdate', fromD);
+      if (toD) params.append('tdate', toD);
+
+      const res = await fetch(`${apiConfig.base_url}/sales/customer-wise-product/?${params.toString()}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setData(json.result || []);
+        setTotalCount(json.count || 0);
+        setTotalQuantity(json.totalqty || 0);
+      }
+    } catch (err) {
+      console.error('Error fetching customer wise product report data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token, currentPage, recordsPerPage, sortField, sortOrder, selectedItem, fromDate, toDate, patientName]);
+
+  // Load initial sales data dynamically on mount
+  useEffect(() => {
+    if (!token) return;
+    fetchReportData(1, 10, 'created_at', 'desc', null, '', '', null);
+  }, [token]);
 
   const handleApplyFilters = () => {
-    setAppliedFilters({
-      item: selectedItem,
-      patient: patientName,
-      dateFilter,
-      from: fromDate,
-      to: toDate,
-    });
     setCurrentPage(1);
+    fetchReportData(1, recordsPerPage, sortField, sortOrder);
   };
 
   const handleReset = () => {
-    setSelectedItem('');
-    setPatientName('');
+    const todayStr = formatDate(new Date());
+    setSelectedItem(null);
+    setPatientName(null);
     setDateFilter('Today');
-    setFromDate('2026-09-01');
-    setToDate('2026-09-01');
-    setAppliedFilters({
-      item: '',
-      patient: '',
-      dateFilter: 'Today',
-      from: '2026-09-01',
-      to: '2026-09-01',
-    });
+    setFromDate(todayStr);
+    setToDate(todayStr);
+    setData([]);
+    setTotalCount(0);
+    setTotalQuantity(0);
     setCurrentPage(1);
+    fetchReportData(1, recordsPerPage, 'created_at', 'desc', null, todayStr, todayStr, null);
   };
 
-  const handleDateFilterChange = (val) => {
-    setDateFilter(val);
-    if (val === 'Today') {
-      setFromDate('2026-09-01');
-      setToDate('2026-09-01');
-    } else if (val === 'Yesterday') {
-      setFromDate('2026-08-31');
-      setToDate('2026-08-31');
-    } else if (val === 'Last 7 Days') {
-      setFromDate('2026-08-25');
-      setToDate('2026-09-01');
-    } else if (val === 'Current Month') {
-      setFromDate('2026-09-01');
-      setToDate('2026-09-30');
-    } else if (val === 'Last Month') {
-      setFromDate('2026-08-01');
-      setToDate('2026-08-31');
-    } else if (val === 'Last 3 Months') {
-      setFromDate('2026-06-01');
-      setToDate('2026-09-01');
-    }
+  const handleSort = (field) => {
+    const newOrder = sortField === field && sortOrder === 'asc' ? 'desc' : 'asc';
+    setSortField(field);
+    setSortOrder(newOrder);
+    fetchReportData(currentPage, recordsPerPage, field, newOrder);
   };
 
-  const handleSort = (column) => {
-    if (sortColumn === column) {
-      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortColumn(column);
-      setSortDirection('asc');
-    }
+  const handlePageChange = (newPage) => {
+    setCurrentPage(newPage);
+    fetchReportData(newPage, recordsPerPage, sortField, sortOrder);
   };
 
-  const sortedData = [...data].sort((a, b) => {
-    if (!sortColumn) return 0;
-    let aVal = a[sortColumn];
-    let bVal = b[sortColumn];
+  const handleRecordsPerPageChange = (newSize) => {
+    setRecordsPerPage(newSize);
+    setCurrentPage(1);
+    fetchReportData(1, newSize, sortField, sortOrder);
+  };
 
-    if (typeof aVal === 'string') {
-      aVal = aVal.toLowerCase();
-      bVal = (bVal || '').toLowerCase();
-    }
-
-    if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
-    if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
-    return 0;
-  });
-
-  const totalCount = sortedData.length;
-  const totalQuantity = sortedData.reduce((acc, row) => acc + (Number(row.qty) || 0), 0);
+  const renderSortIcon = (field) => {
+    return (
+      <span className="inline-flex items-center shrink-0">
+        <svg width="9" height="12" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M1.5 4.5L5 1L8.5 4.5" stroke="#000000" strokeWidth="2.2" strokeLinecap="square" strokeLinejoin="miter" />
+          <path d="M1.5 8.5L5 12L8.5 8.5" stroke="#000000" strokeWidth="2.2" strokeLinecap="square" strokeLinejoin="miter" />
+        </svg>
+      </span>
+    );
+  };
 
   const exportToCSV = () => {
     if (data.length === 0) {
@@ -149,13 +218,13 @@ export default function CustomerWiseProductList() {
     }
     const headers = ['S.No', 'Bill No', 'Date', 'Product Name', 'Qty', 'Batch', 'Exp Date'];
     const rows = data.map((item, index) => [
-      index + 1,
-      `"${item.billNo || ''}"`,
-      `"${item.date || ''}"`,
+      (currentPage - 1) * Number(recordsPerPage === 'All' ? 0 : recordsPerPage) + index + 1,
+      item.billNo || '',
+      item.date || '',
       `"${item.productName || ''}"`,
       item.qty || 0,
-      `"${item.batch || ''}"`,
-      `"${item.expDate || ''}"`
+      item.batch || '',
+      item.expDate || ''
     ]);
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
@@ -173,11 +242,11 @@ export default function CustomerWiseProductList() {
       return;
     }
     const exportData = data.map((item, index) => ({
-      'S.No': index + 1,
+      'S.No': (currentPage - 1) * Number(recordsPerPage === 'All' ? 0 : recordsPerPage) + index + 1,
       'Bill No': item.billNo || '',
       'Date': item.date || '',
       'Product Name': item.productName || '',
-      'Qty': item.qty || 0,
+      'Qty': item.qty !== null && item.qty !== undefined ? item.qty : '',
       'Batch': item.batch || '',
       'Exp Date': item.expDate || ''
     }));
@@ -188,17 +257,6 @@ export default function CustomerWiseProductList() {
     XLSX.writeFile(workbook, "Customer_Wise_Product_List.xlsx");
   };
 
-  const renderSortIcon = (column) => {
-    return (
-      <span className="inline-flex items-center shrink-0" style={{ marginLeft: '22px' }}>
-        <svg width="9" height="12" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M1.5 4.5L5 1L8.5 4.5" stroke="#000000" strokeWidth="2.2" strokeLinecap="square" strokeLinejoin="miter" />
-          <path d="M1.5 8.5L5 12L8.5 8.5" stroke="#000000" strokeWidth="2.2" strokeLinecap="square" strokeLinejoin="miter" />
-        </svg>
-      </span>
-    );
-  };
-
   return (
     <div className="px-[15px] pt-[15px] pb-0 bg-white min-h-screen flex flex-col font-sans text-gray-800 antialiased">
 
@@ -206,24 +264,46 @@ export default function CustomerWiseProductList() {
       <h3
         style={{
           color: '#323F52',
-          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
           fontSize: '25.2px',
-          fontWeight: '500',
+          lineHeight: '30.24px',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
           margin: '18px 0px 28px 0px',
+          fontWeight: '500',
+          textTransform: 'uppercase',
         }}
       >
         CUSTOMER WISE PRODUCT LIST
       </h3>
 
-      {/* Filters Form Container */}
+      {/* Filters Card Container */}
       <div
-        className="border border-[#e3e6ec] rounded-[4px] p-[15px] mb-[15px] bg-[#fbfbfb]"
+        className="patients-filter-panel"
         style={{
-          boxShadow: '0 0.125rem 0.25rem rgba(0, 0, 0, 0.04)',
+          color: '#212529',
+          fontSize: '12.96px',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+          margin: '0px 0px 18px 0px',
+          padding: '12px',
+          backgroundColor: '#FFFFFF',
+          border: '1px solid #dee2e6',
+          borderRadius: '4px',
         }}
       >
-        {/* Filter Header */}
-        <div className="flex items-center gap-1.5 font-bold text-[#212529] text-[13px] border-b border-[#eee] pb-2">
+        {/* Filters Header */}
+        <div
+          className="patients-filter-title"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            color: '#212529',
+            fontSize: '14px',
+            lineHeight: '19.44px',
+            fontFamily: 'Arial, sans-serif',
+            margin: '0px 0px 8px 0px',
+            fontWeight: '600',
+          }}
+        >
           <svg className="w-3.5 h-3.5 fill-[#212529]" viewBox="0 0 24 24">
             <path d="M2.5 4C2.5 3.44772 2.94772 3 3.5 3H20.5C21.0523 3 21.5 3.44772 21.5 4C21.5 4.30472 21.3638 4.5936 21.1287 4.7876L14.5 10.25V18.25C14.5 18.5724 14.3444 18.8724 14.0799 19.0601L10.5799 21.5601C10.0984 21.904 9.5 21.5594 9.5 20.9702V10.25L2.87132 4.7876C2.63616 4.5936 2.5 4.30472 2.5 4Z" />
           </svg>
@@ -240,7 +320,7 @@ export default function CustomerWiseProductList() {
           }}
         >
           {/* Select Item */}
-          <div className="flex-1 min-w-[180px]">
+          <div className="shrink-0" style={{ flex: 1, minWidth: '200px' }}>
             <SearchableSelect
               id="select2-item_value-container"
               label="Select Item"
@@ -254,7 +334,7 @@ export default function CustomerWiseProductList() {
           </div>
 
           {/* Patient Name */}
-          <div className="flex-1 min-w-[180px]">
+          <div className="shrink-0" style={{ flex: 1, minWidth: '200px' }}>
             <SearchableSelect
               id="select2-search_customer_name-container"
               label="Patient Name"
@@ -268,7 +348,7 @@ export default function CustomerWiseProductList() {
           </div>
 
           {/* Date Filter */}
-          <div className="w-[140px] shrink-0">
+          <div className="shrink-0" style={{ width: '198px' }}>
             <label
               htmlFor="selector"
               style={{
@@ -293,7 +373,7 @@ export default function CustomerWiseProductList() {
                   fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
                   fontSize: '14.4px',
                   backgroundColor: '#FFFFFF',
-                  padding: '4px 24px 4px 10.8px',
+                  padding: '4px 6px',
                   height: '35px',
                   border: '1px solid #ced4da',
                   borderRadius: '4px',
@@ -350,8 +430,9 @@ export default function CustomerWiseProductList() {
               From Date
             </label>
             <input
-              type="date"
               id="fdate"
+              className="form-control"
+              type="date"
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
               onClick={(e) => {
@@ -359,7 +440,19 @@ export default function CustomerWiseProductList() {
                   e.target.showPicker();
                 } catch (err) {}
               }}
-              className="w-full bg-[#FFFFFF] border border-[#ced4da] rounded-[4px] px-[10px] h-[35px] text-[14.4px] text-[#495057] outline-none cursor-pointer"
+              style={{
+                color: '#495057',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                fontSize: '14.4px',
+                backgroundColor: '#FFFFFF',
+                padding: '4px 10px',
+                height: '35px',
+                border: '1px solid #ced4da',
+                borderRadius: '4px',
+                width: '100%',
+                outline: 'none',
+                cursor: 'pointer',
+              }}
             />
           </div>
 
@@ -379,8 +472,9 @@ export default function CustomerWiseProductList() {
               To Date
             </label>
             <input
-              type="date"
               id="tdate"
+              className="form-control"
+              type="date"
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
               onClick={(e) => {
@@ -388,35 +482,27 @@ export default function CustomerWiseProductList() {
                   e.target.showPicker();
                 } catch (err) {}
               }}
-              className="w-full bg-[#FFFFFF] border border-[#ced4da] rounded-[4px] px-[10px] h-[35px] text-[14.4px] text-[#495057] outline-none cursor-pointer"
+              style={{
+                color: '#495057',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                fontSize: '14.4px',
+                backgroundColor: '#FFFFFF',
+                padding: '4px 10px',
+                height: '35px',
+                border: '1px solid #ced4da',
+                borderRadius: '4px',
+                width: '100%',
+                outline: 'none',
+                cursor: 'pointer',
+              }}
             />
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Apply Filters */}
-            <button
-              onClick={handleApplyFilters}
-              className="bg-[#007BFF] hover:bg-[#0069d9] text-white px-3.5 h-[35px] rounded-[4px] flex items-center gap-1.5 font-medium transition-colors cursor-pointer border border-[#007bff]"
-            >
-              <svg className="w-3.5 h-3.5 fill-white" viewBox="0 0 24 24">
-                <path d="M2.5 4C2.5 3.44772 2.94772 3 3.5 3H20.5C21.0523 3 21.5 3.44772 21.5 4C21.5 4.30472 21.3638 4.5936 21.1287 4.7876L14.5 10.25V18.25C14.5 18.5724 14.3444 18.8724 14.0799 19.0601L10.5799 21.5601C10.0984 21.904 9.5 21.5594 9.5 20.9702V10.25L2.87132 4.7876C2.63616 4.5936 2.5 4.30472 2.5 4Z" />
-              </svg>
-              <span>Apply Filters</span>
-            </button>
+          {/* Apply Filters Button */}
+          <ApplyFilterButton onClick={handleApplyFilters} />
 
-            {/* Reset */}
-            <button
-              onClick={handleReset}
-              className="bg-[#6c757d] hover:bg-[#5a6268] text-white px-3.5 h-[35px] rounded-[4px] flex items-center gap-1.5 font-medium transition-colors cursor-pointer border border-[#6c757d]"
-            >
-              <svg className="w-3.5 h-3.5 stroke-white fill-none" strokeWidth="2.5" viewBox="0 0 24 24">
-                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                <path d="M3 3v5h5" />
-              </svg>
-              <span>Reset</span>
-            </button>
-          </div>
+          {/* Reset Button */}
+          <ResetButton onClick={handleReset} />
         </div>
       </div>
 
@@ -431,7 +517,7 @@ export default function CustomerWiseProductList() {
           padding: '0px 15px',
         }}
       >
-        {/* Control Toolbar Row (div.row) */}
+        {/* Control Toolbar Row */}
         <div
           className="row flex flex-nowrap items-center w-full"
           style={{
@@ -477,7 +563,7 @@ export default function CustomerWiseProductList() {
                 id="pagesize"
                 className="form-control-sm custom-select pagesize"
                 value={recordsPerPage}
-                onChange={(e) => setRecordsPerPage(e.target.value)}
+                onChange={(e) => handleRecordsPerPageChange(e.target.value)}
                 style={{
                   width: '61.6px',
                   height: '34.4px',
@@ -517,136 +603,12 @@ export default function CustomerWiseProductList() {
             </div>
           </div>
 
-          {/* Left Arrow Pair */}
-          <div
-            className="flex items-center shrink-0"
-            style={{ marginLeft: '30px' }}
-          >
-            <div
-              className="flex items-center rounded overflow-hidden shadow-xs"
-              style={{
-                width: '49.89px',
-                height: '27.7px',
-                backgroundColor: '#8d9aa6',
-                borderRadius: '4px',
-              }}
-            >
-              {/* First Page (<<) */}
-              <button
-                disabled={currentPage === 1 || totalCount === 0 || recordsPerPage === 'All'}
-                onClick={() => setCurrentPage(1)}
-                className="hover:bg-[#7b8894] disabled:opacity-85 flex items-center justify-center transition-colors h-full"
-                style={{
-                  width: '24.44px',
-                  height: '27.7px',
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  padding: 0,
-                }}
-                title="First Page"
-              >
-                <svg width="11" height="11" viewBox="0 0 11 11" fill="white">
-                  <path d="M5.5 1L0.5 5.5L5.5 10V1ZM10.5 1L5.5 5.5L10.5 10V1Z" />
-                </svg>
-              </button>
-              {/* Divider */}
-              <div style={{ width: '1px', height: '14px', backgroundColor: '#6c7985' }}></div>
-              {/* Prev Page (<) */}
-              <button
-                disabled={currentPage === 1 || totalCount === 0 || recordsPerPage === 'All'}
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                className="hover:bg-[#7b8894] disabled:opacity-85 flex items-center justify-center transition-colors h-full"
-                style={{
-                  width: '24.44px',
-                  height: '27.7px',
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  padding: 0,
-                }}
-                title="Previous Page"
-              >
-                <svg width="6" height="11" viewBox="0 0 6 11" fill="white">
-                  <path d="M5.5 1L0.5 5.5L5.5 10V1Z" />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          {/* Page Status */}
-          <span
-            id="get_items5_pager_info"
-            className="pagedisplay select-none font-bold shrink-0 flex items-center"
-            style={{
-              color: '#212529',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-              fontSize: '12.96px',
-              padding: '0px 10px',
-              whiteSpace: 'nowrap',
-              margin: 0,
-            }}
-          >
-            {recordsPerPage === 'All'
-              ? (totalCount === 0 ? '0 to 0 (0)' : `1 to ${totalCount} (${totalCount})`)
-              : (totalCount === 0 ? '0 to 0 (0)' : `${(currentPage - 1) * Number(recordsPerPage) + 1} to ${Math.min(currentPage * Number(recordsPerPage), totalCount)} (${totalCount})`)}
-          </span>
-
-          {/* Right Arrow Pair */}
-          <div
-            className="flex items-center shrink-0"
-          >
-            <div
-              className="flex items-center rounded overflow-hidden shadow-xs"
-              style={{
-                width: '49.89px',
-                height: '27.7px',
-                backgroundColor: '#8d9aa6',
-                borderRadius: '4px',
-              }}
-            >
-              {/* Next Page (>) */}
-              <button
-                disabled={totalCount === 0 || recordsPerPage === 'All' || currentPage * Number(recordsPerPage) >= totalCount}
-                onClick={() => setCurrentPage((p) => p + 1)}
-                className="hover:bg-[#7b8894] disabled:opacity-85 flex items-center justify-center transition-colors h-full"
-                style={{
-                  width: '24.44px',
-                  height: '27.7px',
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  padding: 0,
-                }}
-                title="Next Page"
-              >
-                <svg width="6" height="11" viewBox="0 0 6 11" fill="white">
-                  <path d="M0.5 1L5.5 5.5L0.5 10V1Z" />
-                </svg>
-              </button>
-              {/* Divider */}
-              <div style={{ width: '1px', height: '14px', backgroundColor: '#6c7985' }}></div>
-              {/* Last Page (>>) */}
-              <button
-                disabled={totalCount === 0 || recordsPerPage === 'All' || currentPage * Number(recordsPerPage) >= totalCount}
-                onClick={() => setCurrentPage(Math.ceil(totalCount / Number(recordsPerPage)) || 1)}
-                className="hover:bg-[#7b8894] disabled:opacity-85 flex items-center justify-center transition-colors h-full"
-                style={{
-                  width: '24.44px',
-                  height: '27.7px',
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  padding: 0,
-                }}
-                title="Last Page"
-              >
-                <svg width="11" height="11" viewBox="0 0 11 11" fill="white">
-                  <path d="M0.5 1L5.5 5.5L0.5 10V1ZM5.5 1L10.5 5.5L5.5 10V1Z" />
-                </svg>
-              </button>
-            </div>
-          </div>
+          <PaginationControls 
+            page={currentPage - 1} 
+            setPage={(p) => handlePageChange(p + 1)} 
+            size={recordsPerPage === 'All' ? 1000000 : Number(recordsPerPage)} 
+            totalCount={totalCount} 
+          />
 
           {/* Export to CSV */}
           <ToCsvButton className="ml-[16px]" onClick={exportToCSV} />
@@ -661,7 +623,7 @@ export default function CustomerWiseProductList() {
             <thead>
               <tr className="bg-[#EEEEEE] text-[#212529] font-bold border-b border-[#dee2e6]">
                 {/* S.No */}
-                <th className="border-r border-[#dee2e6] p-0 text-center font-bold" style={{ width: '80px', minWidth: '70px', height: '38px' }}>
+                <th className="border-r border-[#dee2e6] p-0 text-center font-bold" style={{ width: '52px', minWidth: '52px', height: '38px' }}>
                   <div
                     className="tablesorter-header-inner"
                     style={{
@@ -701,7 +663,7 @@ export default function CustomerWiseProductList() {
                     }}
                   >
                     <span>Bill No</span>
-                    <div style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)' }}>
+                    <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
                       {renderSortIcon('billNo')}
                     </div>
                   </div>
@@ -729,7 +691,7 @@ export default function CustomerWiseProductList() {
                     }}
                   >
                     <span>Date</span>
-                    <div style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)' }}>
+                    <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
                       {renderSortIcon('date')}
                     </div>
                   </div>
@@ -777,7 +739,7 @@ export default function CustomerWiseProductList() {
                     }}
                   >
                     <span>Qty</span>
-                    <div style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)' }}>
+                    <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
                       {renderSortIcon('qty')}
                     </div>
                   </div>
@@ -805,7 +767,7 @@ export default function CustomerWiseProductList() {
                     }}
                   >
                     <span>Batch</span>
-                    <div style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)' }}>
+                    <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
                       {renderSortIcon('batch')}
                     </div>
                   </div>
@@ -815,7 +777,7 @@ export default function CustomerWiseProductList() {
                 <th
                   className="p-0 cursor-pointer select-none font-bold"
                   onClick={() => handleSort('expDate')}
-                  style={{ width: '150px', minWidth: '120px', height: '38px' }}
+                  style={{ width: '130px', minWidth: '110px', height: '38px' }}
                 >
                   <div
                     className="tablesorter-header-inner"
@@ -833,7 +795,7 @@ export default function CustomerWiseProductList() {
                     }}
                   >
                     <span>Exp Date</span>
-                    <div style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)' }}>
+                    <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}>
                       {renderSortIcon('expDate')}
                     </div>
                   </div>
@@ -841,46 +803,48 @@ export default function CustomerWiseProductList() {
               </tr>
             </thead>
 
-            {/* Table Body */}
             <tbody>
-              {sortedData.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="text-center py-5 text-gray-500 text-[13px] bg-white">
+              {isLoading ? (
+                <tr className="bg-white">
+                  <td colSpan={7} className="py-8 text-center text-[13.5px] text-[#0052cc] font-medium">
+                    Loading data...
+                  </td>
+                </tr>
+              ) : data.length === 0 ? (
+                <tr className="bg-white">
+                  <td colSpan={7} className="py-6 text-center text-[13px] text-[#495057] font-normal">
                     No Data Found
                   </td>
                 </tr>
               ) : (
-                sortedData.map((row, index) => (
-                  <tr
-                    key={index}
-                    className="border-b border-[#dee2e6] hover:bg-[#f8f9fa] transition-colors text-[13px]"
-                  >
+                data.map((row, index) => (
+                  <tr key={index} className="border-b border-[#dee2e6] hover:bg-gray-50">
                     <td className="py-2.5 px-3 text-center text-gray-600 border-r border-[#dee2e6]">
                       {recordsPerPage === 'All' ? index + 1 : (currentPage - 1) * Number(recordsPerPage) + index + 1}
                     </td>
                     <td className="py-2.5 px-3 text-gray-700 font-medium border-r border-[#dee2e6]">{row.billNo}</td>
                     <td className="py-2.5 px-3 text-gray-600 border-r border-[#dee2e6]">{row.date}</td>
-                    <td className="py-2.5 px-4 text-gray-800 border-r border-[#dee2e6]">{row.productName}</td>
-                    <td className="py-2.5 px-3 text-center text-gray-700 font-medium border-r border-[#dee2e6]">{row.qty}</td>
+                    <td className="py-2.5 px-4 text-gray-800 border-r border-[#dee2e6] font-medium">{row.productName}</td>
+                    <td className="py-2.5 px-3 text-center text-gray-700 border-r border-[#dee2e6] font-semibold">{row.qty}</td>
                     <td className="py-2.5 px-3 text-gray-600 border-r border-[#dee2e6]">{row.batch}</td>
                     <td className="py-2.5 px-3 text-gray-600">{row.expDate}</td>
                   </tr>
                 ))
               )}
             </tbody>
-
-            {/* Table Footer: Total Quantity */}
-            <tfoot>
-              <tr className="bg-[#EEEEEE] text-[#212529] font-bold border-t border-[#dee2e6]">
-                <td colSpan={4} className="py-2.5 px-4 text-right">
-                  Total Quantity
-                </td>
-                <td className="py-2.5 px-3 text-center text-[#212529]">
-                  {totalQuantity}
-                </td>
-                <td colSpan={2} className="py-2.5 px-3"></td>
-              </tr>
-            </tfoot>
+            {data.length > 0 && (
+              <tfoot>
+                <tr className="bg-[#f8f9fa] font-bold border-t-2 border-[#dee2e6]">
+                  <td colSpan={4} className="py-2.5 px-4 text-right text-gray-800 border-r border-[#dee2e6]">
+                    Total Quantity:
+                  </td>
+                  <td className="py-2.5 px-3 text-center text-[#0052cc] border-r border-[#dee2e6] font-bold text-[14px]">
+                    {totalQuantity}
+                  </td>
+                  <td colSpan={2} className="py-2.5 px-3"></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
