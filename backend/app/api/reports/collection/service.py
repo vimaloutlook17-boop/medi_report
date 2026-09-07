@@ -23,8 +23,6 @@ async def fetch_collection_report(
             billing_log.*, 
             customer_details.customer_name, 
             customer_details.phone, 
-            SUM(billing_log.credit) as credit, 
-            SUM(billing_log.debit) as debit, 
             users.name as createdby 
         FROM billing_log 
         LEFT JOIN customer_details ON billing_log.cust_id = customer_details.cid 
@@ -74,7 +72,7 @@ async def fetch_collection_report(
         totals_query += " AND users.name = %s"
         params.append(created_by)
 
-    details_query += " GROUP BY DATE(billing_log.receipt_date), billing_log.bill_id, billing_log.payment_mode ORDER BY billing_log.receipt_date ASC"
+    details_query += " ORDER BY billing_log.receipt_date ASC"
     totals_query += " GROUP BY billing_log.payment_mode"
 
     async with conn.cursor() as cur:
@@ -100,12 +98,18 @@ async def search_customers(
     search_query = """
         SELECT DISTINCT customer_name, phone 
         FROM customer_details 
-        WHERE shop_id = %s AND (customer_name LIKE %s OR phone LIKE %s)
-        LIMIT 10
+        WHERE (customer_name LIKE %s OR phone LIKE %s)
     """
-    search_param = f"%{query}%"
+    params = [f"%{query}%", f"%{query}%"]
+    
+    if shop_id:
+        search_query += " AND shop_id = %s"
+        params.append(shop_id)
+        
+    search_query += " LIMIT 10"
+    
     async with conn.cursor() as cur:
-        await cur.execute(search_query, (shop_id, search_param, search_param))
+        await cur.execute(search_query, params)
         results = await cur.fetchall()
     return results
 
@@ -117,12 +121,17 @@ async def search_users(
     search_query = """
         SELECT DISTINCT id, name
         FROM users
-        WHERE shop_id = %s AND name LIKE %s
-        ORDER BY name ASC
-        LIMIT 10
+        WHERE name LIKE %s
     """
-    search_param = f"%{query}%"
+    params = [f"%{query}%"]
+    
+    if shop_id:
+        search_query += " AND shop_id = %s"
+        params.append(shop_id)
+        
+    search_query += " ORDER BY name ASC LIMIT 10"
+    
     async with conn.cursor() as cur:
-        await cur.execute(search_query, (shop_id, search_param))
+        await cur.execute(search_query, params)
         results = await cur.fetchall()
     return results

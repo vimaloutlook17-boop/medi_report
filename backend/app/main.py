@@ -12,7 +12,6 @@ from app.api.reports.router import router as reports_router
 from contextlib import asynccontextmanager
 from app.database import init_db, close_db
 from fastapi.middleware.cors import CORSMiddleware
-
 import logging
 import re
 
@@ -72,7 +71,7 @@ if os.path.isdir(frontend_dist):
             return {"detail": "Not Found"}
         index_path = os.path.join(frontend_dist, "index.html")
         if os.path.exists(index_path):
-            return FileResponse(index_path)
+            return FileResponse(index_path, headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"})
         return {"detail": "Frontend build not found. Please run 'npm run build' in the frontend directory."}
 else:
     @app.get("/{catchall:path}")

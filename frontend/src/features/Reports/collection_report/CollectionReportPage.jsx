@@ -156,12 +156,16 @@ export default function CollectionReportPage() {
       row.createdby || ''
     ]);
     
-    data.push(['Grand total', '', '', '', formatCurrency(totals.credit), formatCurrency(totals.debit), '', '']);
-    data.push(['Cash in Hand', '', '', '', formatCurrency(totals.cashInHand), '', '', '']);
+    const footData = [
+      ['Grand total', '', '', '', formatCurrency(totals.credit), formatCurrency(totals.debit), '', ''],
+      ['Cash in Hand', '', '', '', formatCurrency(totals.cashInHand), '', '', '']
+    ];
 
     autoTable(doc, {
       head: headers,
       body: data,
+      foot: footData,
+      showFoot: 'everyPage',
       startY: 22,
       theme: 'grid',
       styles: { 
@@ -176,12 +180,13 @@ export default function CollectionReportPage() {
         textColor: [255, 255, 255], 
         fontStyle: 'bold' 
       },
+      footStyles: {
+        fillColor: [26, 188, 156],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold'
+      },
       didParseCell: function(data) {
-        if (data.section === 'body' && data.row.index >= reportData.length) {
-          data.cell.styles.fillColor = [26, 188, 156];
-          data.cell.styles.textColor = [255, 255, 255];
-          data.cell.styles.fontStyle = 'bold';
-          
+        if (data.section === 'foot') {
           if (data.column.index === 0) {
             data.cell.styles.halign = 'left';
             data.cell.styles.lineWidth = { top: 0.1, bottom: 0.1, left: 0.1, right: 0 };

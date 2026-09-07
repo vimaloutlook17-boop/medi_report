@@ -24,6 +24,8 @@ export default function AuthHandler() {
         redirectPath = '/sales/product-wise-customer';
       } else if (cleanModule === 'reports') {
         redirectPath = '/reports/collection_report';
+      } else if (cleanModule === 'op_ip_report') {
+        redirectPath = '/reports/op_ip_report';
       }
       
       // Navigate to the clean URL, replacing history so the user can't press "Back" to see the token
