@@ -296,7 +296,7 @@ export default function ProductSummaryPage() {
           <tbody>
             {data.length === 0 ? (
               <tr>
-                <td colSpan="3" className="p-[10.8px] text-center text-[#212529] text-[12.96px]">No products found.</td>
+                <td colSpan="3" className="p-[10.8px] text-center text-[#212529] font-bold text-[12.96px]">No records found</td>
               </tr>
             ) : (
               data.map((row, idx) => (

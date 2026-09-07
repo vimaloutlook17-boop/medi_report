@@ -1,26 +1,193 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import ToCsvButton from '../../../components/ToCsvButton';
 import ToExcelButton from '../../../components/ToExcelButton';
 import NavigationTabs from '../../../components/NavigationTabs';
 import PaginationControls from '../../../components/PaginationControls';
 import ToPrintButton from '../../../components/ToPrintButton';
+import { useAuth } from '../../../AuthContext';
+import { apiConfig } from '../../../config';
+import * as XLSX from 'xlsx';
+import SearchableSelect from '../../../components/SearchableSelect';
+import Loader from '../../../components/Loader';
 
 export default function StockReportBatchWisePage() {
-  const data = [
-    { id: 1, product: '10 D 200ml', batch: '987654321io', qty: 45, cost: '2.00', totalCost: '90.00', mrp: '6.00', totalMrp: '270.00' },
-    { id: 2, product: '10 D 200ml', batch: 'noiuytre', qty: 50, cost: '2.00', totalCost: '100.00', mrp: '6.00', totalMrp: '300.00' },
-    { id: 3, product: '10 D 500ML', batch: 'no09876', qty: 30, cost: '2.00', totalCost: '60.00', mrp: '4.00', totalMrp: '120.00' },
-    { id: 4, product: '5 D 500ML', batch: '12226087', qty: 1, cost: '0.00', totalCost: '0.00', mrp: '37.99', totalMrp: '37.99' },
-    { id: 5, product: '5ML NIPRO', batch: '24D2K27', qty: 20, cost: '0.00', totalCost: '0.00', mrp: '19.50', totalMrp: '390.00' },
-    { id: 6, product: '66666', batch: '6456456', qty: 30, cost: '40.00', totalCost: '1,200.00', mrp: '50.00', totalMrp: '1,500.00' },
-    { id: 7, product: '7777777', batch: 'NEWBATCH0001', qty: 20, cost: '7.90', totalCost: '158.00', mrp: '8.90', totalMrp: '178.00' },
-    { id: 8, product: 'AC New', batch: 'batch001', qty: 6, cost: '2.03', totalCost: '12.18', mrp: '4.56', totalMrp: '27.36' },
-  ];
+  const { token } = useAuth();
+  
+  // Data state
+  const [isLoading, setIsLoading] = useState(true);
+  const [data, setData] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(0);
+  const [size, setSize] = useState(10);
+  
+  // Search dropdown state
+  const [selectedProduct, setSelectedProduct] = useState('Search Product...');
+  const [productOptions, setProductOptions] = useState([]);
+
+  // Fetch product list for dropdown
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${apiConfig.base_url}/stocks/products-summary/products`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(result => {
+        if (Array.isArray(result)) {
+          setProductOptions(['Search Product...', ...result.map(item => item.name)]);
+        }
+      })
+      .catch(err => console.error("Error fetching products dropdown:", err));
+  }, [token]);
+
+  // Fetch main table data
+  useEffect(() => {
+    if (!token) return;
+    
+    setIsLoading(true);
+    let url = `${apiConfig.base_url}/stocks/stock-report-batch-wise?page=${page}&size=${size}`;
+    if (selectedProduct && selectedProduct !== 'Search Product...') {
+      url += `&search=${encodeURIComponent(selectedProduct)}`;
+    }
+    
+    fetch(url, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(result => {
+        setData(result.data || []);
+        setTotalCount(result.total_count || 0);
+      })
+      .catch(err => console.error("Error fetching batch-wise report:", err))
+      .finally(() => setIsLoading(false));
+  }, [page, size, token, selectedProduct]);
+
+  // Calculations for Footer
+  const totalCostOverall = data.reduce((sum, row) => sum + (row.totalqty * row.cost), 0).toFixed(2);
+  const totalMrpOverall = data.reduce((sum, row) => sum + (row.totalqty * row.mrp), 0).toFixed(2);
+
+  const handlePrint = async () => {
+    try {
+      let url = `${apiConfig.base_url}/stocks/stock-report-batch-wise?page=0&size=-1`;
+      if (selectedProduct && selectedProduct !== 'Search Product...' && selectedProduct !== '-- Select --') {
+        url += `&search=${encodeURIComponent(selectedProduct)}`;
+      }
+      
+      const res = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const result = await res.json();
+      const printData = result.data || [];
+
+      const shopRes = await fetch(`${apiConfig.base_url}/auth/shop-profile`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const shopProfile = shopRes.ok ? await shopRes.json() : {};
+      const shopName = shopProfile.name || "Test Clinic";
+      const shopAddress = [shopProfile.address1, shopProfile.address2].filter(Boolean).join(" ") || "line1 line2";
+      const shopCity = [shopProfile.city, shopProfile.state].filter(Boolean).join(" ") || "city Tamilnadu";
+
+      const printWindow = window.open('', '_blank');
+      
+      const today = new Date();
+      const formattedDate = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}-${today.getFullYear()}`;
+
+      let html = `
+        <html>
+          <head>
+            <title>Stock Report Batch Wise</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; font-size: 12px; }
+              .header { text-align: center; margin-bottom: 20px; }
+              .header h2 { margin: 0 0 5px 0; font-size: 18px; }
+              .header p { margin: 2px 0; font-size: 12px; }
+              .header h3 { margin: 10px 0; font-size: 14px; }
+              table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+              th, td { border: 1px solid #000; padding: 6px; text-align: left; font-size: 12px; }
+              th { font-weight: bold; background-color: #f8f9fa; }
+              .text-right { text-align: right; }
+              .text-center { text-align: center; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h2>${shopName}</h2>
+              <p>${shopAddress}<br>${shopCity}</p>
+              <h3>Stock Report</h3>
+              <p>Date : ${formattedDate}</p>
+            </div>
+            <table>
+              <thead style="display: table-header-group;">
+                <tr>
+                  <th class="text-center">S.No</th>
+                  <th>Product Name</th>
+                  <th>Batch</th>
+                  <th class="text-center">Total Qty</th>
+                  <th class="text-right">Cost Price</th>
+                  <th class="text-right">Total Cost</th>
+                  <th class="text-right">MRP</th>
+                  <th class="text-right">Total MRP</th>
+                </tr>
+              </thead>
+              <tbody>
+      `;
+
+      printData.forEach((row, index) => {
+        const totalQty = row.totalqty !== null ? row.totalqty : 0;
+        const cost = row.cost !== null ? row.cost : 0;
+        const mrp = row.mrp !== null ? row.mrp : 0;
+        
+        html += `
+          <tr>
+            <td class="text-center">${index + 1}</td>
+            <td>${row.item_name || "-"}</td>
+            <td>${row.batch_item || "-"}</td>
+            <td class="text-center">${totalQty}</td>
+            <td class="text-right">${Number(cost).toFixed(2)}</td>
+            <td class="text-right">${(totalQty * cost).toFixed(2)}</td>
+            <td class="text-right">${Number(mrp).toFixed(2)}</td>
+            <td class="text-right">${(totalQty * mrp).toFixed(2)}</td>
+          </tr>
+        `;
+      });
+
+      html += `
+              </tbody>
+            </table>
+            <script>
+              // Change the URL so the printed footer doesn't show "about:blank"
+              window.history.replaceState(null, '', window.location.origin + '/users/print_stock_report_batchwise.php');
+              window.onload = function() { window.print(); }
+            </script>
+          </body>
+        </html>
+      `;
+
+      printWindow.document.write(html);
+      printWindow.document.close();
+    } catch (err) {
+      console.error("Error generating print:", err);
+    }
+  };
 
   return (
     <div className="px-[15px] pt-[15px] pb-0 bg-white min-h-full">
-      
+      <style>{`
+        .select2-custom-scrollbar::-webkit-scrollbar { width: 14px; }
+        .select2-custom-scrollbar::-webkit-scrollbar-track { background: #f8f9fa; border-left: 1px solid #e5e5e5; }
+        .select2-custom-scrollbar::-webkit-scrollbar-thumb { background-color: #8c8c8c; border-radius: 10px; border: 3px solid #f8f9fa; }
+        .select2-custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #666; }
+        .select2-custom-scrollbar::-webkit-scrollbar-button:single-button { background-color: #f8f9fa; display: block; height: 14px; border-left: 1px solid #e5e5e5; }
+        .select2-custom-scrollbar::-webkit-scrollbar-button:single-button:vertical:decrement {
+          background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='%238c8c8c'><polygon points='50,30 15,80 85,80'/></svg>");
+          background-size: 8px; background-position: center; background-repeat: no-repeat;
+        }
+        .select2-custom-scrollbar::-webkit-scrollbar-button:single-button:vertical:increment {
+          background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='%238c8c8c'><polygon points='50,70 15,20 85,20'/></svg>");
+          background-size: 8px; background-position: center; background-repeat: no-repeat;
+        }
+      `}</style>
+
       {/* Tabs Row Container */}
       <NavigationTabs activeTabLabel="Stock Report Batch Wise" />
 
@@ -30,10 +197,12 @@ export default function StockReportBatchWisePage() {
       {/* Controls Row */}
       <div className="flex flex-wrap items-center justify-start mb-[15px] text-[#212529] text-[12.96px]">
         
-        <PaginationControls page={0} size={10} totalCount={715} />
+        <PaginationControls page={page} setPage={setPage} size={size} totalCount={totalCount} />
 
         {/* Dropdowns */}
         <select 
+          value={size}
+          onChange={(e) => { setSize(Number(e.target.value)); setPage(0); }}
           className="appearance-none m-[7.2px] py-[5.4px] pr-[25.2px] pl-[10.8px] text-[14.4px] text-[#495057] bg-white border border-[#ced4da] rounded-[3.2px] h-[34.4px] outline-none bg-no-repeat cursor-pointer"
           style={{ 
             backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 5'%3e%3cpath fill='%23343a40' d='M2 0L0 2h4zm0 5L0 3h4z'/%3e%3c/svg%3e")`,
@@ -46,10 +215,12 @@ export default function StockReportBatchWisePage() {
           <option value="50">50</option>
           <option value="75">75</option>
           <option value="100">100</option>
-          <option value="1000000">All</option>
+          <option value="-1">All</option>
         </select>
         
         <select 
+          value={page}
+          onChange={(e) => setPage(Number(e.target.value))}
           className="appearance-none m-[7.2px] py-[5.4px] pr-[25.2px] pl-[10.8px] text-[14.4px] text-[#495057] bg-white border border-[#ced4da] rounded-[3.2px] h-[34.4px] outline-none bg-no-repeat cursor-pointer"
           style={{ 
             backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 5'%3e%3cpath fill='%23343a40' d='M2 0L0 2h4zm0 5L0 3h4z'/%3e%3c/svg%3e")`,
@@ -57,25 +228,74 @@ export default function StockReportBatchWisePage() {
             backgroundSize: '8px 10px'
           }}
         >
-          <option>1</option>
+          {Array.from({ length: Math.ceil(totalCount / size) || 1 }, (_, i) => (
+            <option key={i} value={i}>{i + 1}</option>
+          ))}
         </select>
 
-        {/* Search Input (Select2 Mock) */}
-        <div className="relative ml-[7.2px] w-[200px]">
-          <div className="w-full h-[28.09px] border border-[#aaa] rounded-[4px] bg-white flex items-center justify-between pl-[8px] pr-[20px] cursor-pointer shadow-[inset_0_1px_1px_rgba(0,0,0,0.075)]">
-            <span className="text-[#999999] text-[12.96px] truncate select2-selection__placeholder">
-              Search Product...
-            </span>
-            <span className="absolute right-[8px] top-[50%] translate-y-[-50%] text-[#888] text-[10px] pointer-events-none">
-              ▼
-            </span>
-          </div>
+        {/* Search Input using standard component */}
+        <div className="ml-[7.2px] w-[200px]">
+          <SearchableSelect
+            id="productSearch"
+            value={selectedProduct}
+            onChange={(opt) => {
+              setSelectedProduct(opt || 'Search Product...');
+              setPage(0);
+            }}
+            options={productOptions}
+            placeholder="Search Product..."
+          />
         </div>
 
         {/* Action Buttons */}
-        <ToCsvButton className="ml-[7.2px]" />
-        <ToExcelButton className="ml-[7.2px]" />
-        <ToPrintButton className="ml-[7.2px]" />
+        <ToCsvButton className="ml-[7.2px]" onClick={() => {
+          const exportData = data.map((row, idx) => ({
+            "S.No": page * size + idx + 1,
+            "Product Name": row.item_name || "-",
+            "Batch Name": row.batch_item || "-",
+            "Total Qty": row.totalqty !== null ? row.totalqty : "-",
+            "Cost Price": row.cost !== null ? row.cost : "-",
+            "Total Cost Amount": (row.totalqty !== null && row.cost !== null) ? (row.totalqty * row.cost).toFixed(2) : "-",
+            "MRP": row.mrp !== null ? row.mrp : "-",
+            "Total MRP Amount": (row.totalqty !== null && row.mrp !== null) ? (row.totalqty * row.mrp).toFixed(2) : "-"
+          }));
+          exportData.push({
+            "S.No": "Total",
+            "Product Name": totalCostOverall,
+            "Batch Name": "",
+            "Total Qty": totalMrpOverall,
+            "Cost Price": "",
+            "Total Cost Amount": "",
+            "MRP": "",
+            "Total MRP Amount": ""
+          });
+          const ws = XLSX.utils.json_to_sheet(exportData);
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, "stockreport_batchwise");
+          XLSX.writeFile(wb, "stockreport_batchwise.csv");
+        }} />
+        
+        <ToExcelButton className="ml-[7.2px]" onClick={() => {
+          const exportData = data.map((row, idx) => ({
+            "S.No": page * size + idx + 1,
+            "Product Name": row.item_name || "-",
+            "Batch Name": row.batch_item || "-",
+            "Total Qty": row.totalqty !== null ? Number(row.totalqty) : "-",
+            "Cost Price": row.cost !== null ? Number(row.cost) : "-",
+            "Total Cost Amount": (row.totalqty !== null && row.cost !== null) ? Number((row.totalqty * row.cost).toFixed(2)) : "-",
+            "MRP": row.mrp !== null ? Number(row.mrp) : "-",
+            "Total MRP Amount": (row.totalqty !== null && row.mrp !== null) ? Number((row.totalqty * row.mrp).toFixed(2)) : "-"
+          }));
+          const ws = XLSX.utils.json_to_sheet(exportData);
+          ws['!cols'] = [
+            { wch: 10 }, { wch: 30 }, { wch: 20 }, { wch: 10 }, { wch: 15 }, { wch: 20 }, { wch: 15 }, { wch: 20 }
+          ];
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, "stockreport");
+          XLSX.writeFile(wb, "stockreport.xlsx");
+        }} />
+        
+        <ToPrintButton className="ml-[7.2px]" onClick={handlePrint} />
       </div>
 
       {/* Data Table */}
@@ -110,34 +330,50 @@ export default function StockReportBatchWisePage() {
             </tr>
           </thead>
           <tbody className="font-sans">
-            {data.map((row, index) => (
-              <tr key={row.id} className="bg-white hover:bg-[#66a3ff] transition-colors">
-                <td className="p-[10.8px] border-t border-r border-[#ddd] text-[#212529]">{row.id}</td>
-                <td className="p-[10.8px] border-t border-r border-[#ddd] text-[#212529]">{row.product}</td>
-                <td className="p-[10.8px] border-t border-r border-[#ddd] text-[#212529]">{row.batch}</td>
-                <td className="p-[10.8px] border-t border-r border-[#ddd] text-[#212529] text-center">{row.qty}</td>
-                <td className="p-[10.8px] border-t border-r border-[#ddd] text-[#212529] text-right">{row.cost}</td>
-                <td className="p-[10.8px] border-t border-r border-[#ddd] text-[#212529] text-right">{row.totalCost}</td>
-                <td className="p-[10.8px] border-t border-r border-[#ddd] text-[#212529] text-right">{row.mrp}</td>
-                <td className="p-[10.8px] border-t border-[#ddd] text-[#212529] text-right">{row.totalMrp}</td>
+            {isLoading ? (
+              <tr>
+                <td colSpan="8" className="p-4 text-center">
+                  <Loader />
+                </td>
               </tr>
-            ))}
+            ) : data.length === 0 ? (
+              <tr>
+                <td colSpan="8" className="p-[10.8px] text-center text-[#212529] font-bold text-[12.96px]">
+                  No records found
+                </td>
+              </tr>
+            ) : (
+              data.map((row, index) => (
+              <tr key={index} className="bg-white hover:bg-[#66a3ff] transition-colors">
+                <td className="p-[10.8px] border-t border-r border-[#ddd] text-[#212529] text-center">{page * size + index + 1}</td>
+                <td className="p-[10.8px] border-t border-r border-[#ddd] text-[#212529]">{row.item_name || '-'}</td>
+                <td className="p-[10.8px] border-t border-r border-[#ddd] text-[#212529]">{row.batch_item || '-'}</td>
+                <td className="p-[10.8px] border-t border-r border-[#ddd] text-[#212529] text-center">{row.totalqty !== null ? row.totalqty : '-'}</td>
+                <td className="p-[10.8px] border-t border-r border-[#ddd] text-[#212529] text-right">{row.cost !== null ? row.cost : '-'}</td>
+                <td className="p-[10.8px] border-t border-r border-[#ddd] text-[#212529] text-right">{(row.totalqty * row.cost).toFixed(2)}</td>
+                <td className="p-[10.8px] border-t border-r border-[#ddd] text-[#212529] text-right">{row.mrp !== null ? row.mrp : '-'}</td>
+                <td className="p-[10.8px] border-t border-[#ddd] text-[#212529] text-right">{(row.totalqty * row.mrp).toFixed(2)}</td>
+              </tr>
+              ))
+            )}
           </tbody>
-          <tfoot className="font-sans font-bold bg-white">
-            <tr>
-              <td colSpan="5" className="p-[10.8px] border-t border-r border-[#ddd] text-[#212529] text-right">
-                Total
-              </td>
-              <td className="p-[10.8px] border-t border-r border-[#ddd] text-[#212529] text-right">
-                1771.68
-              </td>
-              <td className="p-[10.8px] border-t border-r border-[#ddd] text-[#212529] text-right">
-              </td>
-              <td className="p-[10.8px] border-t border-[#ddd] text-[#212529] text-right">
-                29378.81
-              </td>
-            </tr>
-          </tfoot>
+          {data.length > 0 && (
+            <tfoot className="font-sans font-bold bg-white">
+              <tr>
+                <td colSpan="5" className="p-[10.8px] border-t border-r border-[#ddd] text-[#212529] text-right">
+                  Total
+                </td>
+                <td className="p-[10.8px] border-t border-r border-[#ddd] text-[#212529] text-right">
+                  {totalCostOverall}
+                </td>
+                <td className="p-[10.8px] border-t border-r border-[#ddd] text-[#212529] text-right">
+                </td>
+                <td className="p-[10.8px] border-t border-[#ddd] text-[#212529] text-right">
+                  {totalMrpOverall}
+                </td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 

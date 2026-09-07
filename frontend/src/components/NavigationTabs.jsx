@@ -30,13 +30,13 @@ export default function NavigationTabs({ activeTabLabel }) {
           return (
             <li key={i} className="nav-item mr-[2px] mb-[-1px]">
               {isActive ? (
-                <span className="nav-link active inline-block px-[14.4px] py-[7.2px] text-[#555] bg-white border border-[#ddd] border-b-transparent rounded-t-[4px] cursor-default relative z-10">
+                <span className="nav-link active inline-block px-[10px] py-[7.2px] text-[#555] bg-white border border-[#ddd] border-b-transparent rounded-t-[4px] cursor-default relative z-10">
                   {tab.label}
                 </span>
               ) : (
                 <Link 
                   to={tab.path} 
-                  className="nav-link inline-block px-[14.4px] py-[7.2px] border border-transparent rounded-t-[4px] text-[#007BFF] hover:bg-transparent hover:text-[#212529] hover:border-[#ddd] relative hover:z-10 transition-colors"
+                  className="nav-link inline-block px-[10px] py-[7.2px] border border-transparent rounded-t-[4px] text-[#007BFF] hover:bg-transparent hover:text-[#212529] hover:border-[#ddd] relative hover:z-10 transition-colors"
                 >
                   {tab.label}
                 </Link>
