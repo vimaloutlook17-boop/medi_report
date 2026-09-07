@@ -94,7 +94,7 @@ def get_product_wise_customer(
         SELECT 
             bd.invoice_no AS billNo, 
             IFNULL(DATE_FORMAT(bd.created_at, '%%d/%%m/%%Y'), '') AS date,
-            IFNULL(DATE_FORMAT(bd.exp_date, '%%m/%%y'), '') AS expDate,
+            IFNULL(DATE_FORMAT(bd.exp_date, '%%d-%%m-%%Y'), '') AS expDate,
             bd.cust_id,
             COALESCE(c.customer_name, CONCAT('Customer #', bd.cust_id)) AS customerName,
             COALESCE(c.phone, '') AS mobile,
@@ -198,19 +198,13 @@ def search_items(
     sql = """
         SELECT id, name, CONCAT(name, ' (ID: ', id, ')') AS label
         FROM item
-        WHERE (name LIKE %s OR id LIKE %s)
+        WHERE shop_id = %s AND (name LIKE %s OR id LIKE %s)
+        ORDER BY name ASC
+        LIMIT 25
     """
-    params = [search_pattern, search_pattern]
-    
-    if shop_id:
-        sql += " AND shop_id = %s"
-        params.append(shop_id)
-        
-    sql += " ORDER BY name ASC LIMIT 25"
-    
     try:
         with get_db_cursor() as cursor:
-            cursor.execute(sql, params)
+            cursor.execute(sql, [shop_id, search_pattern, search_pattern])
             return cursor.fetchall()
     except Exception as e:
         print(f"Error searching items: {e}")
@@ -230,19 +224,13 @@ def search_patients(
     sql = """
         SELECT cid AS id, customer_name AS name, phone AS mobile, CONCAT(customer_name, ' (', COALESCE(phone, ''), ')') AS label
         FROM customer_details
-        WHERE (customer_name LIKE %s OR phone LIKE %s)
+        WHERE shop_id = %s AND (customer_name LIKE %s OR phone LIKE %s)
+        ORDER BY customer_name ASC
+        LIMIT 25
     """
-    params = [search_pattern, search_pattern]
-    
-    if shop_id:
-        sql += " AND shop_id = %s"
-        params.append(shop_id)
-        
-    sql += " ORDER BY customer_name ASC LIMIT 25"
-    
     try:
         with get_db_cursor() as cursor:
-            cursor.execute(sql, params)
+            cursor.execute(sql, [shop_id, search_pattern, search_pattern])
             return cursor.fetchall()
     except Exception as e:
         print(f"Error searching patients: {e}")

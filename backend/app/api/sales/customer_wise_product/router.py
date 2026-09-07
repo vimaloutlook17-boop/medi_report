@@ -101,7 +101,7 @@ def get_customer_wise_product(
         SELECT 
             bd.invoice_no AS billNo, 
             IFNULL(DATE_FORMAT(bd.created_at, '%%d/%%m/%%Y'), '') AS date,
-            IFNULL(DATE_FORMAT(bd.exp_date, '%%m/%%y'), '') AS expDate,
+            IFNULL(DATE_FORMAT(bd.exp_date, '%%d-%%m-%%Y'), '') AS expDate,
             bd.item_id,
             COALESCE(i.name, CONCAT('Product #', bd.item_id)) AS productName,
             bd.cust_id,

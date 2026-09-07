@@ -320,7 +320,7 @@ export default function CustomerWiseProductList() {
           }}
         >
           {/* Select Item */}
-          <div className="shrink-0" style={{ flex: 1, minWidth: '200px' }}>
+          <div style={{ flex: '1.45 1 0%', minWidth: '180px' }}>
             <SearchableSelect
               id="select2-item_value-container"
               label="Select Item"
@@ -334,7 +334,7 @@ export default function CustomerWiseProductList() {
           </div>
 
           {/* Patient Name */}
-          <div className="shrink-0" style={{ flex: 1, minWidth: '200px' }}>
+          <div style={{ flex: '1.45 1 0%', minWidth: '180px' }}>
             <SearchableSelect
               id="select2-search_customer_name-container"
               label="Patient Name"
@@ -348,7 +348,7 @@ export default function CustomerWiseProductList() {
           </div>
 
           {/* Date Filter */}
-          <div className="shrink-0" style={{ width: '198px' }}>
+          <div style={{ flex: '1.25 1 0%', minWidth: '145px' }}>
             <label
               htmlFor="selector"
               style={{
@@ -362,10 +362,10 @@ export default function CustomerWiseProductList() {
             >
               Date Filter
             </label>
-            <div className="relative">
+            <div className="relative w-full">
               <select
                 id="selector"
-                className="form-control"
+                className="form-control w-full"
                 value={dateFilter}
                 onChange={(e) => handleDateFilterChange(e.target.value)}
                 style={{
@@ -373,7 +373,7 @@ export default function CustomerWiseProductList() {
                   fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
                   fontSize: '14.4px',
                   backgroundColor: '#FFFFFF',
-                  padding: '4px 6px',
+                  padding: '4px 24px 4px 8px',
                   height: '35px',
                   border: '1px solid #ced4da',
                   borderRadius: '4px',
@@ -415,7 +415,7 @@ export default function CustomerWiseProductList() {
           </div>
 
           {/* From Date */}
-          <div className="w-[135px] shrink-0">
+          <div style={{ flex: '0.62 1 0%', minWidth: '115px' }}>
             <label
               htmlFor="fdate"
               style={{
@@ -431,15 +431,10 @@ export default function CustomerWiseProductList() {
             </label>
             <input
               id="fdate"
-              className="form-control"
+              className="form-control w-full"
               type="date"
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
-              onClick={(e) => {
-                try {
-                  e.target.showPicker();
-                } catch (err) {}
-              }}
               style={{
                 color: '#495057',
                 fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
@@ -451,13 +446,12 @@ export default function CustomerWiseProductList() {
                 borderRadius: '4px',
                 width: '100%',
                 outline: 'none',
-                cursor: 'pointer',
               }}
             />
           </div>
 
           {/* To Date */}
-          <div className="w-[135px] shrink-0">
+          <div style={{ flex: '0.62 1 0%', minWidth: '115px' }}>
             <label
               htmlFor="tdate"
               style={{
@@ -473,15 +467,10 @@ export default function CustomerWiseProductList() {
             </label>
             <input
               id="tdate"
-              className="form-control"
+              className="form-control w-full"
               type="date"
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
-              onClick={(e) => {
-                try {
-                  e.target.showPicker();
-                } catch (err) {}
-              }}
               style={{
                 color: '#495057',
                 fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
@@ -493,16 +482,19 @@ export default function CustomerWiseProductList() {
                 borderRadius: '4px',
                 width: '100%',
                 outline: 'none',
-                cursor: 'pointer',
               }}
             />
           </div>
 
           {/* Apply Filters Button */}
-          <ApplyFilterButton onClick={handleApplyFilters} />
+          <div className="shrink-0">
+            <ApplyFilterButton onClick={handleApplyFilters} />
+          </div>
 
           {/* Reset Button */}
-          <ResetButton onClick={handleReset} />
+          <div className="shrink-0">
+            <ResetButton onClick={handleReset} />
+          </div>
         </div>
       </div>
 

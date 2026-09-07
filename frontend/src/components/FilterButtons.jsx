@@ -1,6 +1,6 @@
 import React from 'react';
 
-export const ApplyFilterButton = ({ onClick, id = "applyFilterBtn", text = "ApplyFilters" }) => {
+export const ApplyFilterButton = ({ onClick, id = "applyFilterBtn", text = "Apply Filters" }) => {
   return (
     <button
       id={id}
