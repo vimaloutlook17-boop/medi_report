@@ -224,7 +224,7 @@ export default function ProductSummaryDetailsPage() {
 
                 {transactions.length === 0 ? (
                   <tr className="bg-[#E9ECEF] border-t border-[#dee2e6]">
-                    <td colSpan="7" className="p-[10.8px] text-center text-[#212529] text-[12.96px]">No Data Found</td>
+                    <td colSpan="7" className="p-[10.8px] text-center text-[#212529] font-bold text-[12.96px]">No records found</td>
                   </tr>
                 ) : (
                   <>

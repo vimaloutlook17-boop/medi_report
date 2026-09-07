@@ -159,12 +159,27 @@ export default function SearchableSelect({
           isOpen ? 'rounded-t-[4px] border-b-[#ced4da]' : 'rounded-[4px]'
         }`}
       >
-        <span id={id} className={`truncate text-[13.5px] pl-[8px] pr-[20px] ${!value ? 'text-[#6c757d]' : 'text-[#212529]'}`}>
+        <span id={id} className={`truncate text-[13.5px] pl-[8px] pr-[20px] ${!value || value === placeholder || value === 'Search Product...' || value === '-- Select --' ? 'text-[#6c757d]' : 'text-[#212529]'}`}>
           {getDisplayValue() || placeholder}
         </span>
-        <span className="ml-2 pr-[8px] text-[#6c757d] text-[8px] pointer-events-none">
-          {isOpen ? '▲' : '▼'}
-        </span>
+        <div className="flex items-center ml-2 pr-[8px]">
+          {/* Only show the clear 'x' if a real option is selected */}
+          {value && value !== placeholder && value !== 'Search Product...' && value !== '-- Select --' && (
+            <span 
+              className="mr-2 text-[14px] font-bold text-[#6c757d] hover:text-[#dc3545] cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation(); // Prevent dropdown toggle
+                onChange('');        // Clear the selection
+                setIsOpen(false);
+              }}
+            >
+              ×
+            </span>
+          )}
+          <span className="text-[#6c757d] text-[8px] pointer-events-none">
+            {isOpen ? '▲' : '▼'}
+          </span>
+        </div>
       </div>
 
       {/* Dropdown Menu (Select2 Style) */}

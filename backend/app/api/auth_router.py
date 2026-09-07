@@ -42,3 +42,24 @@ async def generate_secure_url(
         "token": jwt_token,
         "url": secure_url
     }
+
+from app.database import get_db
+from aiomysql import Connection
+from fastapi import Depends
+from app.auth import verify_token
+
+@router.get("/shop-profile")
+async def get_shop_profile(shop_id: int = Depends(verify_token), db: Connection = Depends(get_db)):
+    """Fetches the shop profile data dynamically for printing/display."""
+    try:
+        async with db.cursor() as cur:
+            await cur.execute(
+                "SELECT name, address1, address2, city, state FROM shops WHERE id = %s", 
+                (shop_id,)
+            )
+            row = await cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Shop not found")
+            return row
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

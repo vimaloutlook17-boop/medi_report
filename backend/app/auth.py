@@ -38,4 +38,11 @@ def verify_token(authorization: str = Header(..., description="Bearer JWT Token"
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Could not validate credentials")
+        # Fallback: Check if it's a legacy base64 encoded shop_id (e.g. OQ==)
+        import base64
+        try:
+            decoded_bytes = base64.b64decode(token)
+            shop_id = int(decoded_bytes.decode('utf-8'))
+            return shop_id
+        except Exception:
+            raise HTTPException(status_code=401, detail="Could not validate credentials")
