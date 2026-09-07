@@ -198,13 +198,19 @@ def search_items(
     sql = """
         SELECT id, name, CONCAT(name, ' (ID: ', id, ')') AS label
         FROM item
-        WHERE shop_id = %s AND (name LIKE %s OR id LIKE %s)
-        ORDER BY name ASC
-        LIMIT 25
+        WHERE (name LIKE %s OR id LIKE %s)
     """
+    params = [search_pattern, search_pattern]
+    
+    if shop_id:
+        sql += " AND shop_id = %s"
+        params.append(shop_id)
+        
+    sql += " ORDER BY name ASC LIMIT 25"
+    
     try:
         with get_db_cursor() as cursor:
-            cursor.execute(sql, [shop_id, search_pattern, search_pattern])
+            cursor.execute(sql, params)
             return cursor.fetchall()
     except Exception as e:
         print(f"Error searching items: {e}")
@@ -224,13 +230,19 @@ def search_patients(
     sql = """
         SELECT cid AS id, customer_name AS name, phone AS mobile, CONCAT(customer_name, ' (', COALESCE(phone, ''), ')') AS label
         FROM customer_details
-        WHERE shop_id = %s AND (customer_name LIKE %s OR phone LIKE %s)
-        ORDER BY customer_name ASC
-        LIMIT 25
+        WHERE (customer_name LIKE %s OR phone LIKE %s)
     """
+    params = [search_pattern, search_pattern]
+    
+    if shop_id:
+        sql += " AND shop_id = %s"
+        params.append(shop_id)
+        
+    sql += " ORDER BY customer_name ASC LIMIT 25"
+    
     try:
         with get_db_cursor() as cursor:
-            cursor.execute(sql, [shop_id, search_pattern, search_pattern])
+            cursor.execute(sql, params)
             return cursor.fetchall()
     except Exception as e:
         print(f"Error searching patients: {e}")
