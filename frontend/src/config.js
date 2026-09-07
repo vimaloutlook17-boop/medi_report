@@ -11,7 +11,7 @@ export const apiConfig = {
   // TESTING ENVIRONMENT
   // ==========================================
 
-  // domain: "https://clinicadmin.nigdoc.com",
-  // base_url: "https://clinicadmin.nigdoc.com/api",
+  // domain: "https://reports.nigmedi.com",
+  // base_url: "https://reports.nigmedi.com/api ",
   // auth_generate_url: "https://reports.nigmedi.com/api/auth/generate-secure-url?token=MTM=&module=stocks"
 };
