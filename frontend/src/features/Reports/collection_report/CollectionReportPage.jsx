@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 
 import { useAuth } from '../../../AuthContext';
 import PaginationControls from '../../../components/PaginationControls';
@@ -103,36 +104,42 @@ export default function CollectionReportPage() {
 
   
   const handleExportCSV = () => {
-    const headers = ['S.No', 'Date', 'Bill No', 'Customer Name', 'Received(Rs)', 'Refund(Rs)', 'Payment Mode', 'Created By'];
-    
-    let csvContent = headers.join(',') + '\n';
+    const wsData = [
+      ['S.No', 'Date', 'Bill No', 'Customer Name', 'Received(Rs)', 'Refund(Rs)', 'Payment Mode', 'Created By']
+    ];
     
     reportData.forEach((row, idx) => {
-      const csvRow = [
+      wsData.push([
         idx + 1,
-        `"${formatDateTime(row.receipt_date)}"`,
-        `"${row.bill_id || ''}"`,
-        `"${row.customer_name || ''}"`,
+        formatDateTime(row.receipt_date),
+        row.bill_id || '',
+        row.customer_name || '',
         row.credit || 0,
         row.debit || 0,
-        `"${row.payment_mode || ''}"`,
-        `"${row.createdby || ''}"`
-      ];
-      csvContent += csvRow.join(',') + '\n';
+        row.payment_mode || '',
+        row.createdby || ''
+      ]);
     });
     
-    csvContent += `,,,"Grand total",${formatCurrency(totals.credit)},${formatCurrency(totals.debit)},,\n`;
-    csvContent += `,,,"Cash in Hand",${formatCurrency(totals.cashInHand)},,,\n`;
+    wsData.push(["", "", "", "Grand total", totals.credit, totals.debit, "", ""]);
+    wsData.push(["", "", "", "Cash in Hand", totals.cashInHand, "", "", ""]);
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'Collection Report.csv');
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    ws['!cols'] = [
+      { wch: 8 },  // S.No
+      { wch: 22 }, // Date
+      { wch: 12 }, // Bill No
+      { wch: 35 }, // Customer Name
+      { wch: 15 }, // Received
+      { wch: 15 }, // Refund
+      { wch: 18 }, // Payment Mode
+      { wch: 15 }  // Created By
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Collection Report");
+    XLSX.writeFile(wb, "Collection_Report.xlsx");
   };
 
   

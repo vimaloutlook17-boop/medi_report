@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { jsPDF } from "jspdf";
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 
 import { useAuth } from '../../../AuthContext';
 import PaginationControls from '../../../components/PaginationControls';
@@ -134,21 +137,132 @@ export default function OpIpReportPage() {
     setToDate(tdStr);
   };
 
+  const formatDateTime = (dateString) => {
+    if (!dateString) return '';
+    const d = new Date(dateString);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    let hours = d.getHours();
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    const hoursStr = String(hours).padStart(2, '0');
+    return `${day}/${month}/${year} ${hoursStr}:${minutes} ${ampm}`;
+  };
+
+  const formatVisitType = (type) => {
+    if (type === 'OUT') return 'OP';
+    if (type === 'IN') return 'IP';
+    return type || '';
+  };
+
   const handleExportCSV = () => {
-    let csvContent = "S.No,Bill No,UHID / Patient ID,Date & Time,Patient Name,Visit Type,Bill Amount\n";
+    const wsData = [
+      ["S.No", "Bill No", "UHID / Patient ID", "Date & Time", "Patient Name", "Visit Type", "Bill Amount"]
+    ];
+
     data.forEach((row, idx) => {
       const pName = row.customer_name || '';
-      const pId = `${row.uhid_values || ''} / ${row.customer_id || ''}`;
-      csvContent += `${page * size + idx + 1},${row.bill_id || ''},"${pId}","${row.bill_date || ''}","${pName}",${row.patient_type || ''},${row.after_final_dis || 0}\n`;
+      const pId = row.uhid_values || row.customer_id || '';
+      wsData.push([
+        page * size + idx + 1,
+        row.invoice_no || row.bill_id || '',
+        pId,
+        formatDateTime(row.bill_date),
+        pName,
+        formatVisitType(row.patient_type),
+        parseFloat(row.after_final_dis || 0)
+      ]);
     });
-    csvContent += `,,,,,,Total: ${grandTotal}\n`;
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    link.setAttribute("href", URL.createObjectURL(blob));
-    link.setAttribute("download", "OPIP_Report.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+
+    wsData.push(["Total", "", "", "", "", "", parseFloat(grandTotal)]);
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    // Set column widths to prevent text from being cut off in Excel
+    ws['!cols'] = [
+      { wch: 8 },  // S.No
+      { wch: 12 }, // Bill No
+      { wch: 20 }, // UHID / Patient ID
+      { wch: 22 }, // Date & Time
+      { wch: 35 }, // Patient Name
+      { wch: 12 }, // Visit Type
+      { wch: 15 }  // Bill Amount
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "OPIP Report");
+    XLSX.writeFile(wb, "OPIP_Report.xlsx");
+  };
+
+  const handleExportPDF = () => {
+    const doc = new jsPDF();
+    
+    doc.setFontSize(14);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`OP/IP Wise Report - ${fromDate.split('-').reverse().join('-')} to ${toDate.split('-').reverse().join('-')}`, 14, 15);
+    
+    doc.setFontSize(10);
+    doc.text(`Type: ${visitType}`, 180, 15);
+    
+    const headers = [['S.No', 'Bill No', 'UHID / Patient ID', 'Date & Time', 'Patient Name', 'Visit Type', 'Bill Amount']];
+    
+    const tableData = data.map((row, idx) => {
+      const pName = (row.customer_name || '') + (row.age ? ` (${row.age}${row.age_type || ''})` : '');
+      const pId = row.uhid_values || row.customer_id || '';
+      return [
+        page * size + idx + 1,
+        row.invoice_no || row.bill_id || '',
+        pId,
+        formatDateTime(row.bill_date),
+        pName,
+        formatVisitType(row.patient_type),
+        parseFloat(row.after_final_dis || 0).toFixed(2)
+      ];
+    });
+    
+    const footData = [
+      ['Total', '', '', '', '', '', parseFloat(grandTotal).toFixed(2)]
+    ];
+
+    autoTable(doc, {
+      head: headers,
+      body: tableData,
+      foot: footData,
+      showFoot: 'lastPage',
+      startY: 22,
+      theme: 'grid',
+      styles: { 
+        fontSize: 8, 
+        cellPadding: 3, 
+        lineColor: [210, 210, 210], 
+        lineWidth: 0.1,
+        textColor: [80, 80, 80]
+      },
+      headStyles: { 
+        fillColor: [245, 245, 245], 
+        textColor: [0, 0, 0], 
+        fontStyle: 'bold'
+      },
+      footStyles: { 
+        fillColor: [26, 188, 156], 
+        textColor: [255, 255, 255], 
+        fontStyle: 'bold'
+      },
+      didParseCell: function(data) {
+        if (data.section === 'foot') {
+          // Remove all borders in the footer to create a solid green block
+          data.cell.styles.lineWidth = 0;
+          if (data.column.index === 0) {
+            data.cell.styles.halign = 'left';
+          }
+        }
+      }
+    });
+
+    doc.save('OPIP_Report.pdf');
   };
 
   return (
@@ -246,13 +360,47 @@ export default function OpIpReportPage() {
             page={page}
             setPage={setPage}
             size={size}
-            setSize={setSize}
-            totalElements={totalElements}
-            totalPages={Math.ceil(totalElements / size)}
+            totalCount={totalElements}
           />
-          <div className="flex items-center ml-2">
+          
+          {/* Page Size & Input with Scroll Icons */}
+          <div className="flex items-center h-full ml-[7.2px]">
+            <div className="relative w-[60px] h-[34.4px] mx-[3.6px]">
+              <select 
+                value={size >= 999999 ? 'All' : size} 
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === 'All') setSize(999999);
+                  else setSize(parseInt(val));
+                  setPage(0);
+                }}
+                className="form-control-sm custom-select mb-2 mb-sm-0 border border-[#ced4da] rounded-[3px] py-[5.4px] pl-[10px] pr-[20px] h-full text-[14.4px] text-[#495057] bg-white outline-none w-full appearance-none cursor-pointer"
+              >
+                <option value="10">10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="All">All</option>
+              </select>
+              <svg className="w-[8px] h-[12px] text-[#6c757d] absolute right-[6px] top-1/2 -translate-y-1/2 pointer-events-none" fill="currentColor" viewBox="0 0 320 512"><path d="M137.4 41.4c12.5-12.5 32.8-12.5 45.3 0l128 128c9.2 9.2 11.9 22.9 6.9 34.9s-16.6 19.8-29.6 19.8H32c-12.9 0-24.6-7.8-29.6-19.8s-2.2-25.7 6.9-34.9l128-128zm0 429.3l-128-128c-9.2-9.2-11.9-22.9-6.9-34.9s16.6-19.8 29.6-19.8h256c12.9 0 24.6 7.8 29.6 19.8s2.2 25.7-6.9 34.9l-128 128c-12.5 12.5-32.8 12.5-45.3 0z"/></svg>
+            </div>
+            
+            <div className="relative w-[52.8px] h-[34.4px] mx-[3.6px]">
+              <select
+                value={page + 1}
+                onChange={(e) => setPage(parseInt(e.target.value) - 1)}
+                className="form-control-sm custom-select mb-2 mb-sm-0 border border-[#ced4da] rounded-[3px] py-[5.4px] pl-[10px] pr-[20px] h-full text-[14.4px] text-[#495057] bg-white outline-none w-full appearance-none cursor-pointer"
+              >
+                {Array.from({ length: Math.ceil(totalElements / size) || 1 }, (_, i) => (
+                  <option key={i + 1} value={i + 1}>{i + 1}</option>
+                ))}
+              </select>
+              <svg className="w-[8px] h-[12px] text-[#212529] absolute right-[6px] top-1/2 -translate-y-1/2 pointer-events-none" fill="currentColor" viewBox="0 0 320 512"><path d="M137.4 41.4c12.5-12.5 32.8-12.5 45.3 0l128 128c9.2 9.2 11.9 22.9 6.9 34.9s-16.6 19.8-29.6 19.8H32c-12.9 0-24.6-7.8-29.6-19.8s-2.2-25.7 6.9-34.9l128-128zm0 429.3l-128-128c-9.2-9.2-11.9-22.9-6.9-34.9s16.6-19.8 29.6-19.8h256c12.9 0 24.6 7.8 29.6 19.8s2.2 25.7-6.9 34.9l-128 128c-12.5 12.5-32.8 12.5-45.3 0z"/></svg>
+            </div>
+          </div>
+
+          <div className="flex items-center ml-2 gap-[6px]">
             <ToCsvButton onClick={handleExportCSV} />
-            <ToPdfButton onClick={() => {}} />
+            <ToPdfButton onClick={handleExportPDF} />
           </div>
         </div>
 
@@ -297,11 +445,11 @@ export default function OpIpReportPage() {
                 data.map((row, idx) => (
                   <tr key={idx} className="bg-white text-[#212529] border-b border-[#dee2e6]">
                     <td className="p-[10.8px] text-center border-r border-[#dee2e6] align-middle">{page * size + idx + 1}</td>
-                    <td className="p-[10.8px] text-center border-r border-[#dee2e6] align-middle">{row.bill_id}</td>
-                    <td className="p-[10.8px] text-center border-r border-[#dee2e6] align-middle">{(row.uhid_values || '') + " / " + (row.customer_id || '')}</td>
-                    <td className="p-[10.8px] text-center border-r border-[#dee2e6] align-middle">{row.bill_date ? new Date(row.bill_date).toLocaleString() : ''}</td>
+                    <td className="p-[10.8px] text-center border-r border-[#dee2e6] align-middle">{row.invoice_no || row.bill_id}</td>
+                    <td className="p-[10.8px] text-center border-r border-[#dee2e6] align-middle">{row.uhid_values || row.customer_id || ''}</td>
+                    <td className="p-[10.8px] text-center border-r border-[#dee2e6] align-middle">{formatDateTime(row.bill_date)}</td>
                     <td className="p-[10.8px] text-left border-r border-[#dee2e6] align-middle">{(row.customer_name || '') + (row.age ? ` (${row.age}${row.age_type || ''})` : '')}</td>
-                    <td className="p-[10.8px] text-center border-r border-[#dee2e6] align-middle">{row.patient_type}</td>
+                    <td className="p-[10.8px] text-center border-r border-[#dee2e6] align-middle">{formatVisitType(row.patient_type)}</td>
                     <td className="p-[10.8px] text-right align-middle">{parseFloat(row.after_final_dis || 0).toFixed(2)}</td>
                   </tr>
                 ))
