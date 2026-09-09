@@ -59,11 +59,12 @@ export default function ProductWiseCustomerList() {
   const { token } = useAuth();
 
   // Filter States
+  const todayStr = formatDate(new Date());
   const [selectedItem, setSelectedItem] = useState(null);
   const [customerName, setCustomerName] = useState(null);
-  const [dateFilter, setDateFilter] = useState('Custom Date');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
+  const [dateFilter, setDateFilter] = useState('Today');
+  const [fromDate, setFromDate] = useState(todayStr);
+  const [toDate, setToDate] = useState(todayStr);
 
   // Pagination & Table States
   const [recordsPerPage, setRecordsPerPage] = useState('10');
@@ -114,6 +115,8 @@ export default function ProductWiseCustomerList() {
     if (range) {
       setFromDate(range.from);
       setToDate(range.to);
+      setCurrentPage(1);
+      fetchReportData(1, recordsPerPage, sortField, sortOrder, selectedItem, range.from, range.to, customerName);
     }
   };
 
@@ -151,28 +154,30 @@ export default function ProductWiseCustomerList() {
     }
   }, [token, currentPage, recordsPerPage, sortField, sortOrder, selectedItem, fromDate, toDate, customerName]);
 
-  // Load initial sales data dynamically on mount without pre-filling the product search box
+  // Load initial sales data dynamically on mount with Today's date
   useEffect(() => {
     if (!token) return;
-    fetchReportData(1, 10, '', 'desc', null, '', '');
+    const today = formatDate(new Date());
+    setDateFilter('Today');
+    setFromDate(today);
+    setToDate(today);
+    fetchReportData(1, 10, '', 'desc', null, today, today, null);
   }, [token]);
 
   const handleApplyFilters = () => {
     setCurrentPage(1);
-    fetchReportData(1, recordsPerPage, sortField, sortOrder);
+    fetchReportData(1, recordsPerPage, sortField, sortOrder, selectedItem, fromDate, toDate, customerName);
   };
 
   const handleReset = () => {
-    const todayStr = formatDate(new Date());
+    const today = formatDate(new Date());
     setSelectedItem(null);
     setCustomerName(null);
     setDateFilter('Today');
-    setFromDate(todayStr);
-    setToDate(todayStr);
-    setData([]);
-    setTotalCount(0);
-    setTotalQuantity(0);
+    setFromDate(today);
+    setToDate(today);
     setCurrentPage(1);
+    fetchReportData(1, recordsPerPage, sortField, sortOrder, null, today, today, null);
   };
 
   const handleSort = (field) => {
@@ -317,7 +322,7 @@ export default function ProductWiseCustomerList() {
           }}
         >
           {/* Select Item */}
-          <div style={{ flex: '1.45 1 0%', minWidth: '180px' }}>
+          <div style={{ flex: '1.15 1 0%', minWidth: '150px' }}>
             <SearchableSelect
               id="select2-item_value-container"
               label="Select Item"
@@ -331,7 +336,7 @@ export default function ProductWiseCustomerList() {
           </div>
 
           {/* Patient Name */}
-          <div style={{ flex: '1.45 1 0%', minWidth: '180px' }}>
+          <div style={{ flex: '1.15 1 0%', minWidth: '150px' }}>
             <SearchableSelect
               id="select2-search_customer_name-container"
               label="Patient Name"
@@ -345,7 +350,7 @@ export default function ProductWiseCustomerList() {
           </div>
 
           {/* Date Filter */}
-          <div style={{ flex: '1.25 1 0%', minWidth: '145px' }}>
+          <div style={{ flex: '0.95 1 0%', minWidth: '135px' }}>
             <label
               htmlFor="selector"
               style={{
@@ -364,6 +369,7 @@ export default function ProductWiseCustomerList() {
                 id="selector"
                 className="form-control w-full"
                 value={dateFilter}
+                autoComplete="off"
                 onChange={(e) => handleDateFilterChange(e.target.value)}
                 style={{
                   color: '#495057',
@@ -412,7 +418,7 @@ export default function ProductWiseCustomerList() {
           </div>
 
           {/* From Date */}
-          <div style={{ flex: '0.62 1 0%', minWidth: '115px' }}>
+          <div style={{ flex: '0.85 1 0%', minWidth: '120px' }}>
             <label
               htmlFor="fdate"
               style={{
@@ -431,12 +437,14 @@ export default function ProductWiseCustomerList() {
               className="form-control w-full"
               type="date"
               value={fromDate}
+              autoComplete="off"
               onChange={(e) => setFromDate(e.target.value)}
+              disabled={dateFilter !== 'Custom Date'}
               style={{
                 color: '#495057',
                 fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
                 fontSize: '14.4px',
-                backgroundColor: '#FFFFFF',
+                backgroundColor: dateFilter === 'Custom Date' ? '#FFFFFF' : '#e9ecef',
                 padding: '4px 10px',
                 height: '35px',
                 border: '1px solid #ced4da',
@@ -448,7 +456,7 @@ export default function ProductWiseCustomerList() {
           </div>
 
           {/* To Date */}
-          <div style={{ flex: '0.62 1 0%', minWidth: '115px' }}>
+          <div style={{ flex: '0.85 1 0%', minWidth: '120px' }}>
             <label
               htmlFor="tdate"
               style={{
@@ -467,12 +475,14 @@ export default function ProductWiseCustomerList() {
               className="form-control w-full"
               type="date"
               value={toDate}
+              autoComplete="off"
               onChange={(e) => setToDate(e.target.value)}
+              disabled={dateFilter !== 'Custom Date'}
               style={{
                 color: '#495057',
                 fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
                 fontSize: '14.4px',
-                backgroundColor: '#FFFFFF',
+                backgroundColor: dateFilter === 'Custom Date' ? '#FFFFFF' : '#e9ecef',
                 padding: '4px 10px',
                 height: '35px',
                 border: '1px solid #ced4da',

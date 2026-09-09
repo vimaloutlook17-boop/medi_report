@@ -54,11 +54,12 @@ export default function ProductWiseUniqueCustomerList() {
   const { token } = useAuth();
 
   // Filter States
+  const todayStr = formatDate(new Date());
   const [selectedItem, setSelectedItem] = useState(null);
   const [patientName, setPatientName] = useState(null);
-  const [dateFilter, setDateFilter] = useState('Custom Date');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
+  const [dateFilter, setDateFilter] = useState('Today');
+  const [fromDate, setFromDate] = useState(todayStr);
+  const [toDate, setToDate] = useState(todayStr);
 
   // Pagination & Table States
   const [recordsPerPage, setRecordsPerPage] = useState('10');
@@ -108,6 +109,8 @@ export default function ProductWiseUniqueCustomerList() {
     if (range) {
       setFromDate(range.from);
       setToDate(range.to);
+      setCurrentPage(1);
+      fetchReportData(1, recordsPerPage, sortField, sortOrder, selectedItem, range.from, range.to, patientName);
     }
   };
 
@@ -153,28 +156,30 @@ export default function ProductWiseUniqueCustomerList() {
     }
   }, [token, currentPage, recordsPerPage, sortField, sortOrder, selectedItem, fromDate, toDate, patientName]);
 
-  // Load initial unique customer data dynamically on mount
+  // Load initial unique customer data dynamically on mount with Today's date
   useEffect(() => {
     if (!token) return;
-    fetchReportData(1, 10, 'customer_name', 'asc', null, '', '');
+    const today = formatDate(new Date());
+    setDateFilter('Today');
+    setFromDate(today);
+    setToDate(today);
+    fetchReportData(1, 10, 'customer_name', 'asc', null, today, today, null);
   }, [token]);
 
   const handleApplyFilters = () => {
     setCurrentPage(1);
-    fetchReportData(1, recordsPerPage, sortField, sortOrder);
+    fetchReportData(1, recordsPerPage, sortField, sortOrder, selectedItem, fromDate, toDate, patientName);
   };
 
   const handleReset = () => {
-    const todayStr = formatDate(new Date());
+    const today = formatDate(new Date());
     setSelectedItem(null);
     setPatientName(null);
     setDateFilter('Today');
-    setFromDate(todayStr);
-    setToDate(todayStr);
-    setData([]);
-    setTotalCount(0);
+    setFromDate(today);
+    setToDate(today);
     setCurrentPage(1);
-    fetchReportData(1, recordsPerPage, 'customer_name', 'asc', null, todayStr, todayStr, null);
+    fetchReportData(1, recordsPerPage, 'customer_name', 'asc', null, today, today, null);
   };
 
   const handleSort = (field) => {
@@ -313,7 +318,7 @@ export default function ProductWiseUniqueCustomerList() {
           }}
         >
           {/* Select Item */}
-          <div style={{ flex: '1.45 1 0%', minWidth: '180px' }}>
+          <div style={{ flex: '1.15 1 0%', minWidth: '150px' }}>
             <SearchableSelect
               id="select2-item_value-container"
               label="Select Item"
@@ -327,7 +332,7 @@ export default function ProductWiseUniqueCustomerList() {
           </div>
 
           {/* Patient Name */}
-          <div style={{ flex: '1.45 1 0%', minWidth: '180px' }}>
+          <div style={{ flex: '1.15 1 0%', minWidth: '150px' }}>
             <SearchableSelect
               id="select2-search_customer_name-container"
               label="Patient Name"
@@ -341,7 +346,7 @@ export default function ProductWiseUniqueCustomerList() {
           </div>
 
           {/* Date Filter */}
-          <div style={{ flex: '1.25 1 0%', minWidth: '145px' }}>
+          <div style={{ flex: '0.95 1 0%', minWidth: '135px' }}>
             <label
               htmlFor="selector"
               style={{
@@ -360,6 +365,7 @@ export default function ProductWiseUniqueCustomerList() {
                 id="selector"
                 className="form-control w-full"
                 value={dateFilter}
+                autoComplete="off"
                 onChange={(e) => handleDateFilterChange(e.target.value)}
                 style={{
                   color: '#495057',
@@ -408,7 +414,7 @@ export default function ProductWiseUniqueCustomerList() {
           </div>
 
           {/* From Date */}
-          <div style={{ flex: '0.62 1 0%', minWidth: '115px' }}>
+          <div style={{ flex: '0.85 1 0%', minWidth: '120px' }}>
             <label
               htmlFor="fdate"
               style={{
@@ -427,12 +433,14 @@ export default function ProductWiseUniqueCustomerList() {
               className="form-control w-full"
               type="date"
               value={fromDate}
+              autoComplete="off"
               onChange={(e) => setFromDate(e.target.value)}
+              disabled={dateFilter !== 'Custom Date'}
               style={{
                 color: '#495057',
                 fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
                 fontSize: '14.4px',
-                backgroundColor: '#FFFFFF',
+                backgroundColor: dateFilter === 'Custom Date' ? '#FFFFFF' : '#e9ecef',
                 padding: '4px 10px',
                 height: '35px',
                 border: '1px solid #ced4da',
@@ -444,7 +452,7 @@ export default function ProductWiseUniqueCustomerList() {
           </div>
 
           {/* To Date */}
-          <div style={{ flex: '0.62 1 0%', minWidth: '115px' }}>
+          <div style={{ flex: '0.85 1 0%', minWidth: '120px' }}>
             <label
               htmlFor="tdate"
               style={{
@@ -463,12 +471,14 @@ export default function ProductWiseUniqueCustomerList() {
               className="form-control w-full"
               type="date"
               value={toDate}
+              autoComplete="off"
               onChange={(e) => setToDate(e.target.value)}
+              disabled={dateFilter !== 'Custom Date'}
               style={{
                 color: '#495057',
                 fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
                 fontSize: '14.4px',
-                backgroundColor: '#FFFFFF',
+                backgroundColor: dateFilter === 'Custom Date' ? '#FFFFFF' : '#e9ecef',
                 padding: '4px 10px',
                 height: '35px',
                 border: '1px solid #ced4da',
