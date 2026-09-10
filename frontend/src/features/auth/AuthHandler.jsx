@@ -22,6 +22,8 @@ export default function AuthHandler() {
         redirectPath = '/stocks/product-summary';
       } else if (cleanModule === 'sales') {
         redirectPath = '/sales/product-wise-customer';
+      } else if (cleanModule === 'customer_credit_reports' || cleanModule === 'customer-credit-reports') {
+        redirectPath = '/sales/customer-credit-reports';
       } else if (cleanModule === 'reports') {
         redirectPath = '/reports/collection_report';
       } else if (cleanModule === 'op_ip_report') {

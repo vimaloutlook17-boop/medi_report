@@ -8,6 +8,7 @@ import ZeroStocksPage from './features/stocks/zero_stocks/ZeroStocksPage';
 import ProductWiseCustomerList from './features/sales/product_wise_customer/ProductWiseCustomerList';
 import ProductWiseUniqueCustomerList from './features/sales/product_wise_unique_customer/ProductWiseUniqueCustomerList';
 import CustomerWiseProductList from './features/sales/customer_wise_product/CustomerWiseProductList';
+import CustomerCreditReports from './features/sales/customer_credit_reports/CustomerCreditReports';
 
 import CollectionReportPage from './features/Reports/collection_report/CollectionReportPage';
 import OpIpReportPage from './features/Reports/op_ip_report/OpIpReportPage';
@@ -47,11 +48,15 @@ export default function App() {
               <Route path="/sales/product-wise-customer" element={<ProductWiseCustomerList />} />
               <Route path="/sales/product-wise-unique-customer" element={<ProductWiseUniqueCustomerList />} />
               <Route path="/sales/customer-wise-product" element={<CustomerWiseProductList />} />
+              <Route path="/sales/customer-credit-reports" element={<CustomerCreditReports />} />
+              <Route path="/sales/customer-credit-report" element={<CustomerCreditReports />} />
 
               {/* Sales Direct Alias Routes */}
               <Route path="/product-wise-customer" element={<ProductWiseCustomerList />} />
               <Route path="/product-wise-unique-customer" element={<ProductWiseUniqueCustomerList />} />
               <Route path="/customer-wise-product" element={<CustomerWiseProductList />} />
+              <Route path="/customer-credit-reports" element={<CustomerCreditReports />} />
+              <Route path="/customer-credit-report" element={<CustomerCreditReports />} />
 
               {/* Reports Module */}
               <Route path="/reports/collection_report" element={<CollectionReportPage />} />
