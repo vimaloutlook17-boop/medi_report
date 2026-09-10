@@ -611,11 +611,13 @@ export default function CustomerWiseProductList() {
             totalCount={totalCount} 
           />
 
-          {/* Export to CSV */}
-          <ToCsvButton className="ml-[16px]" onClick={exportToCSV} />
+          <div className="flex items-center shrink-0 ml-auto gap-2">
+            {/* Export to CSV */}
+            <ToCsvButton onClick={exportToCSV} />
 
-          {/* Export to Excel */}
-          <ToExcelButton className="ml-[8px]" onClick={exportToExcel} />
+            {/* Export to Excel */}
+            <ToExcelButton onClick={exportToExcel} />
+          </div>
         </div>
 
         {/* Main Data Table */}
