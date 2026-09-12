@@ -109,8 +109,6 @@ export default function ProductWiseUniqueCustomerList() {
     if (range) {
       setFromDate(range.from);
       setToDate(range.to);
-      setCurrentPage(1);
-      fetchReportData(1, recordsPerPage, sortField, sortOrder, selectedItem, range.from, range.to, patientName);
     }
   };
 
