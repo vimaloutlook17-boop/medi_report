@@ -1,9 +1,62 @@
 from fastapi import APIRouter, Depends, Query, Request
 from typing import Optional
+from pydantic import BaseModel
 from app.auth import verify_token
-from app.api.reports.op_ip.service import fetch_op_ip_report
+from app.api.reports.op_ip.service import fetch_op_ip_report, search_patients, search_patients_by_id, search_patients_by_uhid
 
 router = APIRouter()
+
+class PatientSearchRequest(BaseModel):
+    query: str
+
+@router.post("/search-patients")
+def api_search_patients(
+    payload: PatientSearchRequest,
+    shop_id: int = Depends(verify_token)
+):
+    results = search_patients(shop_id=shop_id, query=payload.query)
+    return {"status": "success", "data": results}
+
+@router.get("/search-patients")
+def api_search_patients_get(
+    query: str = Query(...),
+    shop_id: int = Depends(verify_token)
+):
+    results = search_patients(shop_id=shop_id, query=query)
+    return {"status": "success", "data": results}
+
+@router.post("/search-patients-by-id")
+def api_search_patients_by_id(
+    payload: PatientSearchRequest,
+    shop_id: int = Depends(verify_token)
+):
+    results = search_patients_by_id(shop_id=shop_id, query=payload.query)
+    return {"status": "success", "data": results}
+
+@router.get("/search-patients-by-id")
+def api_search_patients_by_id_get(
+    query: str = Query(...),
+    shop_id: int = Depends(verify_token)
+):
+    results = search_patients_by_id(shop_id=shop_id, query=query)
+    return {"status": "success", "data": results}
+
+@router.post("/search-patients-by-uhid")
+def api_search_patients_by_uhid(
+    payload: PatientSearchRequest,
+    shop_id: int = Depends(verify_token)
+):
+    results = search_patients_by_uhid(shop_id=shop_id, query=payload.query)
+    return {"status": "success", "data": results}
+
+@router.get("/search-patients-by-uhid")
+def api_search_patients_by_uhid_get(
+    query: str = Query(...),
+    shop_id: int = Depends(verify_token)
+):
+    results = search_patients_by_uhid(shop_id=shop_id, query=query)
+    return {"status": "success", "data": results}
+
 
 @router.get("/list")
 def get_op_ip_bill_list(
