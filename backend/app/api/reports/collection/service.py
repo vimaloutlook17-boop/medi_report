@@ -49,9 +49,9 @@ async def fetch_collection_report(
     params = [shop_id]
 
     if bill_no:
-        details_query += " AND billing_log.bill_id = %s"
-        totals_query += " AND billing_log.bill_id = %s"
-        params.append(bill_no)
+        details_query += " AND (billing_log.invoice_no = %s OR billing_log.bill_id = %s)"
+        totals_query += " AND (billing_log.invoice_no = %s OR billing_log.bill_id = %s)"
+        params.extend([bill_no, bill_no])
     else:
         details_query += " AND DATE(billing_log.receipt_date) >= %s AND DATE(billing_log.receipt_date) <= %s"
         totals_query += " AND DATE(billing_log.receipt_date) >= %s AND DATE(billing_log.receipt_date) <= %s"
@@ -63,9 +63,35 @@ async def fetch_collection_report(
         params.append(f"%{customer_name}%")
 
     if payment_mode:
-        details_query += " AND billing_log.payment_mode = %s"
-        totals_query += " AND billing_log.payment_mode = %s"
-        params.append(payment_mode)
+        pm_clean = payment_mode.strip().lower()
+        if pm_clean in ('card', 'credit card', 'debit card'):
+            details_query += " AND (billing_log.payment_mode = %s OR billing_log.payment_mode = %s OR billing_log.payment_mode = %s)"
+            totals_query += " AND (billing_log.payment_mode = %s OR billing_log.payment_mode = %s OR billing_log.payment_mode = %s)"
+            params.extend(['Card', 'Credit Card', 'Debit Card'])
+        elif pm_clean in ('google pay', 'gpay', 'google'):
+            details_query += " AND (billing_log.payment_mode = %s OR billing_log.payment_mode = %s OR billing_log.payment_mode = %s)"
+            totals_query += " AND (billing_log.payment_mode = %s OR billing_log.payment_mode = %s OR billing_log.payment_mode = %s)"
+            params.extend(['Google Pay', 'Gpay', 'Google'])
+        elif pm_clean in ('phonepe', 'phone pe'):
+            details_query += " AND (billing_log.payment_mode = %s OR billing_log.payment_mode = %s)"
+            totals_query += " AND (billing_log.payment_mode = %s OR billing_log.payment_mode = %s)"
+            params.extend(['PhonePe', 'Phone Pe'])
+        elif pm_clean in ('amazon pay', 'amazon'):
+            details_query += " AND (billing_log.payment_mode = %s OR billing_log.payment_mode = %s)"
+            totals_query += " AND (billing_log.payment_mode = %s OR billing_log.payment_mode = %s)"
+            params.extend(['Amazon Pay', 'Amazon'])
+        elif pm_clean in ('net banking', 'netbanking'):
+            details_query += " AND (billing_log.payment_mode = %s OR billing_log.payment_mode = %s)"
+            totals_query += " AND (billing_log.payment_mode = %s OR billing_log.payment_mode = %s)"
+            params.extend(['Net Banking', 'Netbanking'])
+        elif pm_clean == 'paytm':
+            details_query += " AND (billing_log.payment_mode = %s OR billing_log.payment_mode = %s)"
+            totals_query += " AND (billing_log.payment_mode = %s OR billing_log.payment_mode = %s)"
+            params.extend(['Paytm', 'PAYTM'])
+        else:
+            details_query += " AND billing_log.payment_mode = %s"
+            totals_query += " AND billing_log.payment_mode = %s"
+            params.append(payment_mode)
 
     if created_by:
         details_query += " AND users.name = %s"
