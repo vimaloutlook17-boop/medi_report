@@ -40,14 +40,14 @@ def fetch_op_ip_report(
                 where_clauses.append("(b.patient_type = 'WALK-IN' OR b.patient_type = 'WALK_IN')")
                 
             if search_uhid:
-                where_clauses.append("c.uhid_values = %s")
-                params.append(search_uhid)
+                where_clauses.append("c.uhid_values LIKE %s")
+                params.append(f"%{search_uhid}%")
             if search_patient_id:
                 where_clauses.append("c.customer_id = %s")
                 params.append(search_patient_id)
             if search_patient_name:
-                where_clauses.append("c.customer_name = %s")
-                params.append(search_patient_name)
+                where_clauses.append("c.customer_name LIKE %s")
+                params.append(f"%{search_patient_name}%")
                 
             where_sql = " AND ".join(where_clauses)
             condition = f"WHERE {where_sql} AND (b.bill_status IS NULL OR b.bill_status != 'Holding')"
@@ -89,3 +89,66 @@ def fetch_op_ip_report(
             
     finally:
         conn.close()
+
+def search_patients(shop_id: int, query: str):
+    conn = get_db_connection()
+    try:
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            search_query = """
+                SELECT DISTINCT customer_name, customer_id, phone 
+                FROM customer_details 
+                WHERE shop_id = %s 
+                AND customer_name LIKE %s 
+                ORDER BY CASE WHEN customer_name = %s THEN 0 ELSE 1 END, customer_name ASC 
+                LIMIT 50
+            """
+            cursor.execute(search_query, (shop_id, f"%{query}%", query))
+            return cursor.fetchall()
+    finally:
+        conn.close()
+
+def search_patients_by_id(shop_id: int, query: str):
+    conn = get_db_connection()
+    try:
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            search_query = """
+                SELECT DISTINCT customer_id, customer_name, phone 
+                FROM customer_details 
+                WHERE shop_id = %s 
+                AND CAST(customer_id AS CHAR) LIKE %s 
+                ORDER BY CASE 
+                    WHEN CAST(customer_id AS CHAR) = %s THEN 0 
+                    WHEN CAST(customer_id AS CHAR) LIKE %s THEN 1 
+                    ELSE 2 
+                END, customer_id ASC 
+                LIMIT 50
+            """
+            cursor.execute(search_query, (shop_id, f"%{query}%", query, f"{query}%"))
+            return cursor.fetchall()
+    finally:
+        conn.close()
+
+def search_patients_by_uhid(shop_id: int, query: str):
+    conn = get_db_connection()
+    try:
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            search_query = """
+                SELECT DISTINCT uhid_values, customer_id, customer_name, phone 
+                FROM customer_details 
+                WHERE shop_id = %s 
+                AND uhid_values IS NOT NULL 
+                AND uhid_values != '' 
+                AND CAST(uhid_values AS CHAR) LIKE %s 
+                ORDER BY CASE 
+                    WHEN CAST(uhid_values AS CHAR) = %s THEN 0 
+                    WHEN CAST(uhid_values AS CHAR) LIKE %s THEN 1 
+                    ELSE 2 
+                END, uhid_values ASC 
+                LIMIT 50
+            """
+            cursor.execute(search_query, (shop_id, f"%{query}%", query, f"{query}%"))
+            return cursor.fetchall()
+    finally:
+        conn.close()
+
+

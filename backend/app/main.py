@@ -61,12 +61,22 @@ def read_root():
 frontend_dist = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'frontend', 'dist')
 
 if os.path.isdir(frontend_dist):
-    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
+    from fastapi.responses import Response
+    import mimetypes
+
+    @app.get("/assets/{file_path:path}")
+    def serve_assets(file_path: str):
+        full_path = os.path.join(frontend_dist, "assets", file_path)
+        if not os.path.exists(full_path):
+            return Response(status_code=404)
+        mime_type, _ = mimetypes.guess_type(full_path)
+        with open(full_path, "rb") as f:
+            content = f.read()
+        return Response(content=content, media_type=mime_type or "application/octet-stream",
+                        headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"})
 
     @app.get("/{catchall:path}")
     def serve_react_app(catchall: str):
-        # Serve index.html for any unmatched route to support SPA navigation
-        # But ensure we don't accidentally intercept actual API calls (handled by order/prefixes)
         if catchall.startswith("api/"):
             return {"detail": "Not Found"}
         index_path = os.path.join(frontend_dist, "index.html")
