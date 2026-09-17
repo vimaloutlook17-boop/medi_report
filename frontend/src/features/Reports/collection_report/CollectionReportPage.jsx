@@ -112,7 +112,7 @@ export default function CollectionReportPage() {
       wsData.push([
         idx + 1,
         formatDateTime(row.receipt_date),
-        row.bill_id || '',
+        row.invoice_no || '',
         row.customer_name || '',
         row.credit || 0,
         row.debit || 0,
@@ -155,7 +155,7 @@ export default function CollectionReportPage() {
     const data = reportData.map((row, idx) => [
       idx + 1,
       formatDateTime(row.receipt_date),
-      row.bill_id || '',
+      row.invoice_no || '',
       row.customer_name || '',
       row.credit || 0,
       row.debit || 0,
@@ -210,8 +210,9 @@ export default function CollectionReportPage() {
   const fetchReport = async (overrideParams = null) => {
     if (!token) return;
     
-    // Ensure we don't treat the React click event object as our overrideParams!
-    const params = (overrideParams && !overrideParams.nativeEvent) ? overrideParams : {
+    // Ensure we don't treat React events as overrideParams
+    const isOverride = overrideParams && typeof overrideParams === 'object' && !overrideParams.nativeEvent && !overrideParams._reactName && !overrideParams.target;
+    const params = isOverride ? overrideParams : {
       from_date: fromDate,
       to_date: toDate,
       bill_no: billNo || null,
@@ -224,7 +225,6 @@ export default function CollectionReportPage() {
       const response = await fetch(`${apiConfig.base_url}/reports/collection/`, {
         method: 'POST',
         headers: { 
-
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
@@ -251,11 +251,26 @@ export default function CollectionReportPage() {
           { mode: 'Insurance', received: 0, refund: 0 },
         ];
         json.totals.forEach(t => {
-          const dbMode = (t.payment_mode || '').toLowerCase().replace(/\s+/g, '');
-          const mode = updatedModes.find(m => m.mode.toLowerCase().replace(/\s+/g, '') === dbMode);
-          if (mode) {
-            mode.received = t.credit || 0;
-            mode.refund = t.debit || 0;
+          const rawMode = (t.payment_mode || '').toLowerCase().replace(/\s+/g, '');
+          let targetName = null;
+          if (rawMode === 'cash') targetName = 'Cash';
+          else if (rawMode === 'card' || rawMode === 'creditcard' || rawMode === 'debitcard') targetName = 'Card';
+          else if (rawMode === 'googlepay' || rawMode === 'google' || rawMode === 'gpay') targetName = 'Google Pay';
+          else if (rawMode === 'credit') targetName = 'Credit';
+          else if (rawMode === 'netbanking') targetName = 'Net Banking';
+          else if (rawMode === 'phonepe') targetName = 'Phone Pe';
+          else if (rawMode === 'paytm') targetName = 'Paytm';
+          else if (rawMode === 'amazonpay' || rawMode === 'amazon') targetName = 'Amazon Pay';
+          else if (rawMode === 'upi') targetName = 'UPI';
+          else if (rawMode === 'cheque') targetName = 'Cheque';
+          else if (rawMode === 'insurance') targetName = 'Insurance';
+
+          if (targetName) {
+            const mode = updatedModes.find(m => m.mode === targetName);
+            if (mode) {
+              mode.received += parseFloat(t.credit || 0);
+              mode.refund += parseFloat(t.debit || 0);
+            }
           }
         });
         setPaymentModes(updatedModes);
@@ -263,6 +278,11 @@ export default function CollectionReportPage() {
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const handleApplyFilter = () => {
+    setPage(0);
+    fetchReport();
   };
 
   const handleReset = () => {
@@ -523,14 +543,14 @@ export default function CollectionReportPage() {
             {/* Row 1 Col 2: Bill No */}
             <div className="col-span-3">
               <label className="block text-[14px] text-[#212529] font-semibold mb-[4px] h-[20px] leading-[20px]" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>Bill No</label>
-              <input type="text" placeholder="Search Bill No" value={billNo} onChange={e => setBillNo(e.target.value)}  className="w-full border border-[#dee2e6] rounded-[3px] py-[4px] px-[10.8px] h-[34.4px] text-[14.4px] text-[#868e96] placeholder-[#868e96] outline-none focus:border-[#80bdff] focus:shadow-[0_0_0_0.2rem_rgba(0,123,255,0.25)] transition-shadow" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }} />
+              <input type="text" placeholder="Search Bill No" value={billNo} onChange={e => setBillNo(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleApplyFilter(); }} className="w-full border border-[#dee2e6] rounded-[3px] py-[4px] px-[10.8px] h-[34.4px] text-[14.4px] text-[#868e96] placeholder-[#868e96] outline-none focus:border-[#80bdff] focus:shadow-[0_0_0_0.2rem_rgba(0,123,255,0.25)] transition-shadow" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }} />
             </div>
 
             {/* Row 1 Col 3: Payment Mode */}
             <div className="col-span-3">
               <label className="block text-[14px] text-[#212529] font-semibold mb-[4px] h-[20px] leading-[20px]" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>Payment Mode</label>
               <div className="relative">
-                <select value={paymentMode} onChange={e => setPaymentMode(e.target.value)} className="w-full border border-[#dee2e6] rounded-[3px] py-[4px] pl-[10.8px] pr-[24px] h-[34.4px] text-[14.4px] text-[#868e96] bg-white outline-none focus:border-[#80bdff] focus:shadow-[0_0_0_0.2rem_rgba(0,123,255,0.25)] transition-shadow appearance-none" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
+                <select value={paymentMode} onChange={e => setPaymentMode(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleApplyFilter(); }} className="w-full border border-[#dee2e6] rounded-[3px] py-[4px] pl-[10.8px] pr-[24px] h-[34.4px] text-[14.4px] text-[#868e96] bg-white outline-none focus:border-[#80bdff] focus:shadow-[0_0_0_0.2rem_rgba(0,123,255,0.25)] transition-shadow appearance-none" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
                   <option value="">Select Here</option>
                   <option value="Cash">Cash</option>
                   <option value="Card">Card</option>
@@ -696,7 +716,7 @@ export default function CollectionReportPage() {
             
             {/* Row 2 Col 4: Action Buttons */}
             <div className="col-span-6 flex items-end gap-[9px] h-[58.4px]">
-              <ApplyFilterButton onClick={fetchReport} />
+              <ApplyFilterButton onClick={handleApplyFilter} />
               
               <ResetButton onClick={handleReset} />
             </div>
@@ -752,7 +772,7 @@ export default function CollectionReportPage() {
           </div>
 
           {/* Export Buttons */}
-          <div className="flex items-center" style={{ marginLeft: '24px', gap: '4px' }}>
+          <div className="flex items-center ml-auto" style={{ gap: '4px' }}>
             <ToCsvButton onClick={handleExportCSV} />
             <ToPdfButton onClick={handleExportPDF} />
           </div>
@@ -782,7 +802,7 @@ export default function CollectionReportPage() {
             <tr key={idx} className="bg-white hover:bg-[#f1f5f9] transition-colors duration-150 text-[#212529] border-b border-[#dee2e6] text-[12.96px]" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
               <td className="p-[10.8px] text-right border-r border-[#dee2e6]">{page * size + idx + 1}</td>
               <td className="p-[10.8px] text-left border-r border-[#dee2e6]">{formatDateTime(row.receipt_date)}</td>
-              <td className="p-[10.8px] text-right border-r border-[#dee2e6]">{row.bill_id}</td>
+              <td className="p-[10.8px] text-right border-r border-[#dee2e6]">{row.invoice_no}</td>
               <td className="p-[10.8px] text-left border-r border-[#dee2e6] text-[#212529]" style={{ fontSize: '12.96px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>{row.customer_name}</td>
               <td className="p-[10.8px] text-right border-r border-[#dee2e6]">{formatCurrency(row.credit)}</td>
               <td className="p-[10.8px] text-right border-r border-[#dee2e6]">{formatCurrency(row.debit)}</td>

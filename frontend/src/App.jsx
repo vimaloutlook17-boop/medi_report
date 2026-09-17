@@ -12,6 +12,9 @@ import CustomerCreditReports from './features/sales/customer_credit_reports/Cust
 
 import CollectionReportPage from './features/Reports/collection_report/CollectionReportPage';
 import OpIpReportPage from './features/Reports/op_ip_report/OpIpReportPage';
+import BillWiseCollectionPage from './features/Reports/bill_wise_collection/BillWiseCollectionPage';
+
+import BulkEditPage from './features/products/bulk_edit/BulkEditPage';
 
 import AuthHandler from './features/auth/AuthHandler';
 import { AuthProvider } from './AuthContext';
@@ -59,8 +62,18 @@ export default function App() {
               <Route path="/customer-credit-report" element={<CustomerCreditReports />} />
 
               {/* Reports Module */}
-              <Route path="/reports/collection_report" element={<CollectionReportPage />} />
-              <Route path="/reports/op_ip_report" element={<OpIpReportPage />} />
+              <Route path="/reports/collection-report" element={<CollectionReportPage />} />
+              <Route path="/reports/op-ip-report" element={<OpIpReportPage />} />
+              <Route path="/reports/bill-wise-collection" element={<BillWiseCollectionPage />} />
+
+              {/* Reports Direct Alias Routes */}
+              <Route path="/collection-report" element={<CollectionReportPage />} />
+              <Route path="/op-ip-report" element={<OpIpReportPage />} />
+              <Route path="/bill-wise-collection" element={<BillWiseCollectionPage />} />
+
+              {/* Products Module */}
+              <Route path="/products/bulk-edit" element={<BulkEditPage />} />
+              
             </Routes>
           </div>
         </div>

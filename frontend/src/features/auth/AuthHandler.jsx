@@ -28,6 +28,8 @@ export default function AuthHandler() {
         redirectPath = '/reports/collection_report';
       } else if (cleanModule === 'op_ip_report') {
         redirectPath = '/reports/op_ip_report';
+      } else if (cleanModule === 'products' || cleanModule === 'product' || cleanModule === 'bulk_edit' || cleanModule === 'bulk-edit') {
+        redirectPath = '/products/bulk-edit';
       }
       
       // Navigate to the clean URL, replacing history so the user can't press "Back" to see the token

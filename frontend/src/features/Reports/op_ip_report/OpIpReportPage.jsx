@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
 import { useAuth } from '../../../AuthContext';
+import { apiConfig } from '../../../config';
 import PaginationControls from '../../../components/PaginationControls';
 import { ApplyFilterButton, ResetButton } from '../../../components/FilterButtons';
 import ToPdfButton from '../../../components/ToPdfButton';
@@ -22,6 +23,242 @@ export default function OpIpReportPage() {
   const [uhid, setUhid] = useState('');
   const [fromDate, setFromDate] = useState(todayStr);
   const [toDate, setToDate] = useState(todayStr);
+
+  const [patientOptions, setPatientOptions] = useState([]);
+  const [isPatientDropdownOpen, setIsPatientDropdownOpen] = useState(false);
+  const [patientFocusedIndex, setPatientFocusedIndex] = useState(-1);
+  const patientContainerRef = useRef(null);
+
+  const [patientIdOptions, setPatientIdOptions] = useState([]);
+  const [isPatientIdDropdownOpen, setIsPatientIdDropdownOpen] = useState(false);
+  const [patientIdFocusedIndex, setPatientIdFocusedIndex] = useState(-1);
+  const patientIdContainerRef = useRef(null);
+
+  const [uhidOptions, setUhidOptions] = useState([]);
+  const [isUhidDropdownOpen, setIsUhidDropdownOpen] = useState(false);
+  const [uhidFocusedIndex, setUhidFocusedIndex] = useState(-1);
+  const uhidContainerRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (patientContainerRef.current && !patientContainerRef.current.contains(e.target)) {
+        setIsPatientDropdownOpen(false);
+      }
+      if (patientIdContainerRef.current && !patientIdContainerRef.current.contains(e.target)) {
+        setIsPatientIdDropdownOpen(false);
+      }
+      if (uhidContainerRef.current && !uhidContainerRef.current.contains(e.target)) {
+        setIsUhidDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const searchPatients = async (query) => {
+    if (!query || query.trim().length < 2) {
+      setPatientOptions([]);
+      setIsPatientDropdownOpen(false);
+      return;
+    }
+    try {
+      const response = await fetch(`${apiConfig.base_url}/reports/op-ip/search-patients`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ query: query.trim() })
+      });
+      const result = await response.json();
+      if (result.status === 'success') {
+        setPatientOptions(result.data || []);
+        setIsPatientDropdownOpen((result.data || []).length > 0);
+      }
+    } catch (e) {
+      console.error("Error searching patients:", e);
+    }
+  };
+
+  const handlePatientNameChange = (e) => {
+    const val = e.target.value;
+    setPatientName(val);
+    setPatientFocusedIndex(-1);
+    if (val.trim().length >= 2) {
+      searchPatients(val);
+    } else {
+      setPatientOptions([]);
+      setIsPatientDropdownOpen(false);
+    }
+  };
+
+  const selectPatient = (opt) => {
+    setPatientName(opt.customer_name);
+    if (opt.customer_id) {
+      setPatientId(opt.customer_id.toString());
+    }
+    setIsPatientDropdownOpen(false);
+    setPatientFocusedIndex(-1);
+  };
+
+  const handlePatientNameKeyDown = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!isPatientDropdownOpen && patientOptions.length > 0) {
+        setIsPatientDropdownOpen(true);
+      }
+      setPatientFocusedIndex(prev => Math.min(prev + 1, patientOptions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setPatientFocusedIndex(prev => Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter') {
+      if (isPatientDropdownOpen && patientFocusedIndex >= 0 && patientFocusedIndex < patientOptions.length) {
+        e.preventDefault();
+        selectPatient(patientOptions[patientFocusedIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      setIsPatientDropdownOpen(false);
+    }
+  };
+
+  const searchPatientsById = async (query) => {
+    if (!query || query.trim().length < 1) {
+      setPatientIdOptions([]);
+      setIsPatientIdDropdownOpen(false);
+      return;
+    }
+    try {
+      const response = await fetch(`${apiConfig.base_url}/reports/op-ip/search-patients-by-id`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ query: query.trim() })
+      });
+      const result = await response.json();
+      if (result.status === 'success') {
+        setPatientIdOptions(result.data || []);
+        setIsPatientIdDropdownOpen((result.data || []).length > 0);
+      }
+    } catch (e) {
+      console.error("Error searching patients by id:", e);
+    }
+  };
+
+  const handlePatientIdChange = (e) => {
+    const val = e.target.value;
+    setPatientId(val);
+    setPatientIdFocusedIndex(-1);
+    if (val.trim().length >= 1) {
+      searchPatientsById(val);
+    } else {
+      setPatientIdOptions([]);
+      setIsPatientIdDropdownOpen(false);
+    }
+  };
+
+  const selectPatientById = (opt) => {
+    if (opt.customer_id) {
+      setPatientId(opt.customer_id.toString());
+    }
+    if (opt.customer_name) {
+      setPatientName(opt.customer_name);
+    }
+    setIsPatientIdDropdownOpen(false);
+    setPatientIdFocusedIndex(-1);
+  };
+
+  const handlePatientIdKeyDown = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!isPatientIdDropdownOpen && patientIdOptions.length > 0) {
+        setIsPatientIdDropdownOpen(true);
+      }
+      setPatientIdFocusedIndex(prev => Math.min(prev + 1, patientIdOptions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setPatientIdFocusedIndex(prev => Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter') {
+      if (isPatientIdDropdownOpen && patientIdFocusedIndex >= 0 && patientIdFocusedIndex < patientIdOptions.length) {
+        e.preventDefault();
+        selectPatientById(patientIdOptions[patientIdFocusedIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      setIsPatientIdDropdownOpen(false);
+    }
+  };
+
+  const searchPatientsByUhid = async (query) => {
+    if (!query || query.trim().length < 1) {
+      setUhidOptions([]);
+      setIsUhidDropdownOpen(false);
+      return;
+    }
+    try {
+      const response = await fetch(`${apiConfig.base_url}/reports/op-ip/search-patients-by-uhid`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ query: query.trim() })
+      });
+      const result = await response.json();
+      if (result.status === 'success') {
+        setUhidOptions(result.data || []);
+        setIsUhidDropdownOpen((result.data || []).length > 0);
+      }
+    } catch (e) {
+      console.error("Error searching patients by uhid:", e);
+    }
+  };
+
+  const handleUhidChange = (e) => {
+    const val = e.target.value;
+    setUhid(val);
+    setUhidFocusedIndex(-1);
+    if (val.trim().length >= 1) {
+      searchPatientsByUhid(val);
+    } else {
+      setUhidOptions([]);
+      setIsUhidDropdownOpen(false);
+    }
+  };
+
+  const selectPatientByUhid = (opt) => {
+    if (opt.uhid_values) {
+      setUhid(opt.uhid_values.toString());
+    }
+    if (opt.customer_name) {
+      setPatientName(opt.customer_name);
+    }
+    if (opt.customer_id) {
+      setPatientId(opt.customer_id.toString());
+    }
+    setIsUhidDropdownOpen(false);
+    setUhidFocusedIndex(-1);
+  };
+
+  const handleUhidKeyDown = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!isUhidDropdownOpen && uhidOptions.length > 0) {
+        setIsUhidDropdownOpen(true);
+      }
+      setUhidFocusedIndex(prev => Math.min(prev + 1, uhidOptions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setUhidFocusedIndex(prev => Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter') {
+      if (isUhidDropdownOpen && uhidFocusedIndex >= 0 && uhidFocusedIndex < uhidOptions.length) {
+        e.preventDefault();
+        selectPatientByUhid(uhidOptions[uhidFocusedIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      setIsUhidDropdownOpen(false);
+    }
+  };
   
   const [page, setPage] = useState(0);
   const [size, setSize] = useState(10);
@@ -92,6 +329,15 @@ export default function OpIpReportPage() {
     setPatientName('');
     setPatientId('');
     setUhid('');
+    setPatientOptions([]);
+    setIsPatientDropdownOpen(false);
+    setPatientFocusedIndex(-1);
+    setPatientIdOptions([]);
+    setIsPatientIdDropdownOpen(false);
+    setPatientIdFocusedIndex(-1);
+    setUhidOptions([]);
+    setIsUhidDropdownOpen(false);
+    setUhidFocusedIndex(-1);
     setFromDate(todayStr);
     setToDate(todayStr);
     setPage(0);
@@ -270,7 +516,7 @@ export default function OpIpReportPage() {
       <div className="px-[14.4px] pt-[15px]">
 
         {/* Header */}
-        <h3 className="text-[25.2px] font-medium text-[#323F52] mb-[24px] pt-[14.4px] uppercase">
+        <h3 className="text-[25.2px] font-medium text-[#323F52] mb-[12px] pt-[5px] uppercase">
           OP/IP WISE BILL LIST
         </h3>
 
@@ -284,15 +530,138 @@ export default function OpIpReportPage() {
             <div className="flex flex-wrap mx-[-6px]">
               <div className="w-full md:w-1/2 lg:w-1/6 px-[6px] mt-2">
                 <label className="inline-block text-[14px] leading-[20px] font-medium subpixel-antialiased text-[#212529] mb-[4px]" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>Search Patient Name</label>
-                <input type="text" value={patientName} onChange={(e) => setPatientName(e.target.value)} placeholder="Search Patient Name" className="w-full border border-[#ced4da] rounded-[3px] px-[10.8px] py-[4px] h-[34.4px] text-[14.4px] text-[#495057] placeholder-[#999] bg-white outline-none focus:border-[#80bdff] focus:ring-[3px] focus:ring-[#80bdff]/50" />
+                <div className="relative" ref={patientContainerRef}>
+                  <input 
+                    type="text" 
+                    value={patientName} 
+                    onChange={handlePatientNameChange}
+                    onKeyDown={handlePatientNameKeyDown}
+                    onFocus={() => {
+                      if (patientOptions.length > 0) setIsPatientDropdownOpen(true);
+                    }}
+                    placeholder="Search Patient Name" 
+                    className="w-full border border-[#ced4da] rounded-[3px] px-[10.8px] py-[4px] h-[34.4px] text-[14.4px] text-[#495057] placeholder-[#999] bg-white outline-none focus:border-[#80bdff] focus:ring-[3px] focus:ring-[#80bdff]/50" 
+                  />
+                  {isPatientDropdownOpen && patientOptions.length > 0 && (
+                    <div 
+                      className="absolute top-[100%] left-0 w-full bg-white border border-[#ced4da] rounded-b-[3px] shadow-lg z-[9999] mt-[1px] max-h-[220px] overflow-y-auto"
+                      style={{ boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' }}
+                    >
+                      {patientOptions.map((opt, idx) => {
+                        const isFocused = idx === patientFocusedIndex;
+                        const displayText = [opt.customer_name, opt.customer_id, opt.phone].filter(v => v !== null && v !== undefined && v !== '').join(' | ');
+                        return (
+                          <div
+                            key={idx}
+                            ref={el => {
+                              if (el && isFocused) {
+                                el.scrollIntoView({ block: 'nearest' });
+                              }
+                            }}
+                            className={`px-[10.8px] py-[6px] cursor-pointer border-b border-[#e5e5e5] last:border-b-0 text-[14px] select-none transition-colors ${
+                              isFocused ? 'bg-[#d9d9d9] text-[#212529]' : 'bg-white text-[#212529] hover:bg-[#d9d9d9]'
+                            }`}
+                            style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}
+                            onMouseEnter={() => setPatientFocusedIndex(idx)}
+                            onClick={() => selectPatient(opt)}
+                          >
+                            {displayText}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="w-full md:w-1/2 lg:w-1/6 px-[6px] mt-2">
                 <label className="inline-block text-[14px] leading-[20px] font-medium subpixel-antialiased text-[#212529] mb-[4px]" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>Search Patient ID</label>
-                <input type="text" value={patientId} onChange={(e) => setPatientId(e.target.value)} placeholder="Search Patient ID" className="w-full border border-[#ced4da] rounded-[3px] px-[10.8px] py-[4px] h-[34.4px] text-[14.4px] text-[#495057] placeholder-[#999] bg-white outline-none focus:border-[#80bdff] focus:ring-[3px] focus:ring-[#80bdff]/50" />
+                <div className="relative" ref={patientIdContainerRef}>
+                  <input 
+                    type="text" 
+                    value={patientId} 
+                    onChange={handlePatientIdChange}
+                    onKeyDown={handlePatientIdKeyDown}
+                    onFocus={() => {
+                      if (patientIdOptions.length > 0) setIsPatientIdDropdownOpen(true);
+                    }}
+                    placeholder="Search Patient ID" 
+                    className="w-full border border-[#ced4da] rounded-[3px] px-[10.8px] py-[4px] h-[34.4px] text-[14.4px] text-[#495057] placeholder-[#999] bg-white outline-none focus:border-[#80bdff] focus:ring-[3px] focus:ring-[#80bdff]/50" 
+                  />
+                  {isPatientIdDropdownOpen && patientIdOptions.length > 0 && (
+                    <div 
+                      className="absolute top-[100%] left-0 w-full bg-white border border-[#ced4da] rounded-b-[3px] shadow-lg z-[9999] mt-[1px] max-h-[220px] overflow-y-auto"
+                      style={{ boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' }}
+                    >
+                      {patientIdOptions.map((opt, idx) => {
+                        const isFocused = idx === patientIdFocusedIndex;
+                        const displayText = [opt.customer_id, opt.customer_name, opt.phone].filter(v => v !== null && v !== undefined && v !== '').join(' | ');
+                        return (
+                          <div
+                            key={idx}
+                            ref={el => {
+                              if (el && isFocused) {
+                                el.scrollIntoView({ block: 'nearest' });
+                              }
+                            }}
+                            className={`px-[10.8px] py-[6px] cursor-pointer border-b border-[#e5e5e5] last:border-b-0 text-[14px] select-none transition-colors ${
+                              isFocused ? 'bg-[#d9d9d9] text-[#212529]' : 'bg-white text-[#212529] hover:bg-[#d9d9d9]'
+                            }`}
+                            style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}
+                            onMouseEnter={() => setPatientIdFocusedIndex(idx)}
+                            onClick={() => selectPatientById(opt)}
+                          >
+                            {displayText}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="w-full md:w-1/2 lg:w-1/6 px-[6px] mt-2">
                 <label className="inline-block text-[14px] leading-[20px] font-medium subpixel-antialiased text-[#212529] mb-[4px]" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>Search UHID</label>
-                <input type="text" value={uhid} onChange={(e) => setUhid(e.target.value)} placeholder="Search UHID" className="w-full border border-[#ced4da] rounded-[3px] px-[10.8px] py-[4px] h-[34.4px] text-[14.4px] text-[#495057] placeholder-[#999] bg-white outline-none focus:border-[#80bdff] focus:ring-[3px] focus:ring-[#80bdff]/50" />
+                <div className="relative" ref={uhidContainerRef}>
+                  <input 
+                    type="text" 
+                    value={uhid} 
+                    onChange={handleUhidChange}
+                    onKeyDown={handleUhidKeyDown}
+                    onFocus={() => {
+                      if (uhidOptions.length > 0) setIsUhidDropdownOpen(true);
+                    }}
+                    placeholder="Search UHID" 
+                    className="w-full border border-[#ced4da] rounded-[3px] px-[10.8px] py-[4px] h-[34.4px] text-[14.4px] text-[#495057] placeholder-[#999] bg-white outline-none focus:border-[#80bdff] focus:ring-[3px] focus:ring-[#80bdff]/50" 
+                  />
+                  {isUhidDropdownOpen && uhidOptions.length > 0 && (
+                    <div 
+                      className="absolute top-[100%] left-0 w-full bg-white border border-[#ced4da] rounded-b-[3px] shadow-lg z-[9999] mt-[1px] max-h-[220px] overflow-y-auto"
+                      style={{ boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' }}
+                    >
+                      {uhidOptions.map((opt, idx) => {
+                        const isFocused = idx === uhidFocusedIndex;
+                        const displayText = [opt.uhid_values, opt.customer_name, opt.phone].filter(v => v !== null && v !== undefined && v !== '').join(' | ');
+                        return (
+                          <div
+                            key={idx}
+                            ref={el => {
+                              if (el && isFocused) {
+                                el.scrollIntoView({ block: 'nearest' });
+                              }
+                            }}
+                            className={`px-[10.8px] py-[6px] cursor-pointer border-b border-[#e5e5e5] last:border-b-0 text-[14px] select-none transition-colors ${
+                              isFocused ? 'bg-[#d9d9d9] text-[#212529]' : 'bg-white text-[#212529] hover:bg-[#d9d9d9]'
+                            }`}
+                            style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}
+                            onMouseEnter={() => setUhidFocusedIndex(idx)}
+                            onClick={() => selectPatientByUhid(opt)}
+                          >
+                            {displayText}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="w-full md:w-1/2 lg:w-1/6 px-[6px] mt-2">
                 <label className="inline-block text-[14px] leading-[20px] font-medium subpixel-antialiased text-[#212529] mb-[4px]" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>Visit Type</label>
@@ -398,7 +767,7 @@ export default function OpIpReportPage() {
             </div>
           </div>
 
-          <div className="flex items-center ml-2 gap-[6px]">
+          <div className="flex items-center ml-auto gap-[6px]">
             <ToCsvButton onClick={handleExportCSV} />
             <ToPdfButton onClick={handleExportPDF} />
           </div>

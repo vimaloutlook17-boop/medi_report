@@ -8,6 +8,7 @@ from app.api.stocks.router import router as stocks_router
 from app.api.sales.router import router as sales_router
 from app.api.auth_router import router as auth_api_router
 from app.api.reports.router import router as reports_router
+from app.api.products.router import router as products_router
 
 from contextlib import asynccontextmanager
 from app.database import init_db, close_db
@@ -51,6 +52,7 @@ app.include_router(purchase_router.router, prefix='/api/purchase', tags=['Purcha
 app.include_router(stocks_router, prefix='/api/stocks')
 app.include_router(sales_router, prefix='/api/sales')
 app.include_router(reports_router, prefix='/api/reports')
+app.include_router(products_router, prefix='/api/products', tags=['Products'])
 
 @app.get('/api')
 def read_root():

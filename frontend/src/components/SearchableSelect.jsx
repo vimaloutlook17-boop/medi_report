@@ -6,10 +6,11 @@ export default function SearchableSelect({
   value,
   onChange,
   placeholder = '-- Select --',
-  minChars = 0,
+  minChars = 1,
   minCharsMessage,
   options = [],
   onSearch = null,
+  width = '200px',
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -63,11 +64,13 @@ export default function SearchableSelect({
     }
   }, [search, isOpen, onSearch, minChars]);
 
-  const displayOptions = onSearch
+  const displayOptions = (minChars > 0 && search.length < minChars)
+    ? []
+    : onSearch
     ? dynamicOptions
     : options.filter((opt) => {
         const text = typeof opt === 'object' ? (opt.label || opt.name || '') : String(opt);
-        return text.toLowerCase().includes(search.toLowerCase());
+        return text && text !== '0' && text !== '0.00' && text.toLowerCase().includes(search.toLowerCase());
       });
 
   // Ensure highlighted index stays in bounds when display options change
@@ -137,36 +140,60 @@ export default function SearchableSelect({
     }
   };
 
+  const isPlaceholder = !value || value === placeholder || value === 'Search Product...' || value === '-- Select --';
+
   return (
-    <div className="relative w-full" ref={containerRef}>
+    <div className="relative" style={{ width: width || '200px' }} ref={containerRef}>
       {label && (
         <label
           htmlFor={id}
-          className="block font-bold text-[13px] text-[#212529] mb-1"
+          className="block font-bold text-[13.5px] text-[#212529]"
           style={{
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+            fontFamily: 'Arial, -apple-system, sans-serif',
+            margin: '0px 0px 4px 0px'
           }}
         >
           {label}
         </label>
       )}
 
-      <div
+      <span
         tabIndex={0}
+        role="combobox"
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
         onClick={() => setIsOpen(!isOpen)}
         onKeyDown={handleKeyDown}
-        className={`flex items-center justify-between bg-white border border-[#ced4da] h-[35px] text-[14.4px] cursor-pointer select-none outline-none focus:border-[#80bdff] ${
+        className={`select2-selection select2-selection--single relative flex items-center bg-white border border-[#ced4da] cursor-pointer select-none outline-none focus:border-[#80bdff] ${
           isOpen ? 'rounded-t-[4px] border-b-[#ced4da]' : 'rounded-[4px]'
         }`}
+        style={{ width: width || '200px', height: '35px', padding: '3px', display: 'flex', alignItems: 'center' }}
       >
-        <span id={id} className={`truncate text-[13.5px] pl-[8px] pr-[20px] ${!value || value === placeholder || value === 'Search Product...' || value === '-- Select --' ? 'text-[#6c757d]' : 'text-[#212529]'}`}>
+        <span 
+          id={id ? `select2-${id}-container` : undefined} 
+          className={`select2-selection__rendered ${
+            isPlaceholder ? 'select2-selection__placeholder text-[#999999]' : 'text-[#212529]'
+          } truncate inline-block h-[28px] leading-[28px]`}
+          style={{
+            boxSizing: 'border-box',
+            width: '100%',
+            height: '28px',
+            lineHeight: '28px',
+            padding: '0px 20px 0px 8px',
+            fontSize: '12.96px',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+            color: isPlaceholder ? '#999999' : '#212529'
+          }}
+          role="textbox"
+          aria-readonly="true"
+        >
           {getDisplayValue() || placeholder}
         </span>
-        <div className="flex items-center ml-2 pr-[8px]">
+        <div className="absolute right-[8px] top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
           {/* Only show the clear 'x' if a real option is selected */}
           {value && value !== placeholder && value !== 'Search Product...' && value !== '-- Select --' && (
             <span 
-              className="mr-2 text-[14px] font-bold text-[#6c757d] hover:text-[#dc3545] cursor-pointer"
+              className="mr-1 text-[13px] font-bold text-[#6c757d] hover:text-[#dc3545] cursor-pointer pointer-events-auto"
               onClick={(e) => {
                 e.stopPropagation(); // Prevent dropdown toggle
                 onChange('');        // Clear the selection
@@ -176,15 +203,15 @@ export default function SearchableSelect({
               ×
             </span>
           )}
-          <span className="text-[#6c757d] text-[8px] pointer-events-none">
+          <span className="text-[#888888] text-[8px] pointer-events-none">
             {isOpen ? '▲' : '▼'}
           </span>
         </div>
-      </div>
+      </span>
 
       {/* Dropdown Menu (Select2 Style) */}
       {isOpen && (
-        <div className="absolute left-0 right-0 top-[100%] bg-white border border-t-0 border-[#ced4da] rounded-b-[4px] shadow-md z-50 overflow-hidden">
+        <div className="absolute left-0 right-0 top-[100%] bg-white border border-t-0 border-[#ced4da] rounded-b-[4px] shadow-md z-50 overflow-hidden" style={{ width: width || '200px' }}>
           {/* Search Input inside Dropdown */}
           <div className="p-[5px]">
             <input

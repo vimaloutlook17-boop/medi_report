@@ -8,13 +8,13 @@ export default function PaginationControls({ page = 0, setPage = () => {}, size 
   return (
     <>
       <div className="flex items-center ml-[10px]">
-        <button onClick={() => setPage(0)} disabled={isFirstPage} className="bg-[#6C757D] disabled:opacity-50 text-white w-[28.98px] h-[28.09px] py-[3.6px] px-[7.2px] rounded-l-[3px] border border-[#6c757d] hover:bg-[#5c636a] cursor-pointer flex items-center justify-center relative z-10">
+        <button onClick={() => setPage(0)} disabled={isFirstPage} className="bg-[#9FA5AA] text-white w-[28.98px] h-[28.09px] py-[3.6px] px-[7.2px] rounded-l-[3px] border border-[#8a9198] cursor-pointer flex items-center justify-center relative z-10 disabled:cursor-default">
           <svg aria-hidden="true" focusable="false" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 16" className="h-[12px] w-auto" fill="currentColor">
             <polygon points="18,0 9,8 18,16" />
             <polygon points="9,0 0,8 9,16" />
           </svg>
         </button>
-        <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={isFirstPage} className="bg-[#6C757D] disabled:opacity-50 text-white w-[22.69px] h-[28.09px] py-[3.6px] px-[7.2px] rounded-r-[3px] border border-[#6c757d] ml-[-1px] hover:bg-[#5c636a] cursor-pointer flex items-center justify-center relative">
+        <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={isFirstPage} className="bg-[#9FA5AA] text-white w-[22.69px] h-[28.09px] py-[3.6px] px-[7.2px] rounded-r-[3px] border border-[#8a9198] ml-[-1px] cursor-pointer flex items-center justify-center relative disabled:cursor-default">
           <svg aria-hidden="true" focusable="false" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 16" className="h-[12px] w-auto" fill="currentColor">
             <polygon points="10,0 0,8 10,16" />
           </svg>
@@ -26,12 +26,12 @@ export default function PaginationControls({ page = 0, setPage = () => {}, size 
       </span>
       
       <div className="flex items-center">
-        <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={isLastPage} className="bg-[#6C757D] disabled:opacity-50 text-white w-[22.69px] h-[28.09px] py-[3.6px] px-[7.2px] rounded-l-[3px] border border-[#6c757d] hover:bg-[#5c636a] cursor-pointer flex items-center justify-center relative z-10">
+        <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={isLastPage} className="bg-[#9FA5AA] text-white w-[22.69px] h-[28.09px] py-[3.6px] px-[7.2px] rounded-l-[3px] border border-[#8a9198] cursor-pointer flex items-center justify-center relative z-10 disabled:cursor-default">
           <svg aria-hidden="true" focusable="false" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 16" className="h-[12px] w-auto" fill="currentColor">
             <polygon points="0,0 10,8 0,16" />
           </svg>
         </button>
-        <button onClick={() => setPage(Math.max(0, totalPages - 1))} disabled={isLastPage} className="bg-[#6C757D] disabled:opacity-50 text-white w-[28.98px] h-[28.09px] py-[3.6px] px-[7.2px] rounded-r-[3px] border border-[#6c757d] ml-[-1px] hover:bg-[#5c636a] cursor-pointer flex items-center justify-center relative">
+        <button onClick={() => setPage(Math.max(0, totalPages - 1))} disabled={isLastPage} className="bg-[#9FA5AA] text-white w-[28.98px] h-[28.09px] py-[3.6px] px-[7.2px] rounded-r-[3px] border border-[#8a9198] ml-[-1px] cursor-pointer flex items-center justify-center relative disabled:cursor-default">
           <svg aria-hidden="true" focusable="false" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 16" className="h-[12px] w-auto" fill="currentColor">
             <polygon points="0,0 9,8 0,16" />
             <polygon points="9,0 18,8 9,16" />
