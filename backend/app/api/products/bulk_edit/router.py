@@ -221,6 +221,7 @@ async def update_bulk_products(
 ):
     """
     Bulk update Category, Combination, Manufacture, Location, and Reorder Qty for authenticated shop_id.
+    Automatically inserts newly added options into master lookup tables (item_categories, combination, manufactures, locations).
     """
     if not updates:
         return {"status": "success", "message": "No updates provided"}
@@ -233,51 +234,131 @@ async def update_bulk_products(
                 if not item_id:
                     continue
 
-                fields = []
-                params = []
+                cat_id = None
+                comb_id = None
+                manu_id = None
+                loc_id = None
+                reorder_qty = None
 
-                if "category" in item:
-                    cat_val = item["category"] or ""
-                    # Check if category ID exists in item_categories
+                cat_val = None
+                comb_val = None
+                manu_val = None
+                loc_val = None
+
+                # 1. Category -> item_categories table
+                if "category" in item and item["category"] is not None:
+                    cat_val = str(item["category"]).strip()
                     if cat_val:
                         await cur.execute("SELECT id FROM item_categories WHERE shop_id = %s AND name = %s LIMIT 1", (shop_id, cat_val))
                         cat_row = await cur.fetchone()
                         if cat_row:
-                            fields.append("product_category = %s")
-                            params.append(cat_row['id'])
+                            cat_id = cat_row['id']
                         else:
-                            fields.append("product_dept = %s")
-                            params.append(cat_val)
-                    else:
-                        fields.append("product_category = NULL, product_dept = NULL")
+                            await cur.execute("INSERT INTO item_categories (shop_id, name, created_by) VALUES (%s, %s, 0)", (shop_id, cat_val))
+                            cat_id = cur.lastrowid
 
-                if "combination" in item:
-                    comb_val = item["combination"] or ""
-                    fields.append("combination = %s")
-                    params.append(comb_val)
+                # 2. Combination -> combination table
+                if "combination" in item and item["combination"] is not None:
+                    comb_val = str(item["combination"]).strip()
+                    if comb_val:
+                        await cur.execute("SELECT id FROM combination WHERE shop_id = %s AND combination_name = %s LIMIT 1", (shop_id, comb_val))
+                        comb_row = await cur.fetchone()
+                        if comb_row:
+                            comb_id = comb_row['id']
+                        else:
+                            await cur.execute("INSERT INTO combination (shop_id, branch_id, combination_name) VALUES (%s, 0, %s)", (shop_id, comb_val))
+                            comb_id = cur.lastrowid
 
-                if "manufacturer" in item or "manufacture" in item:
-                    manu_val = item.get("manufacturer") or item.get("manufacture") or ""
-                    fields.append("manufacturer = %s")
-                    params.append(manu_val)
+                # 3. Manufacturer -> manufactures table
+                manu_raw = item.get("manufacturer") if "manufacturer" in item else item.get("manufacture")
+                if manu_raw is not None:
+                    manu_val = str(manu_raw).strip()
+                    if manu_val:
+                        await cur.execute("SELECT id FROM manufactures WHERE shop_id = %s AND manu_facturs = %s LIMIT 1", (shop_id, manu_val))
+                        manu_row = await cur.fetchone()
+                        if manu_row:
+                            manu_id = manu_row['id']
+                        else:
+                            await cur.execute("INSERT INTO manufactures (shop_id, manu_facturs) VALUES (%s, %s)", (shop_id, manu_val))
+                            manu_id = cur.lastrowid
 
-                if "location" in item:
-                    loc_val = item["location"] or ""
-                    fields.append("location = %s")
-                    params.append(loc_val)
+                # 4. Location -> locations table
+                if "location" in item and item["location"] is not None:
+                    loc_val = str(item["location"]).strip()
+                    if loc_val:
+                        await cur.execute("SELECT id FROM locations WHERE shop_id = %s AND location_name = %s LIMIT 1", (shop_id, loc_val))
+                        loc_row = await cur.fetchone()
+                        if loc_row:
+                            loc_id = loc_row['id']
+                        else:
+                            await cur.execute("INSERT INTO locations (shop_id, location_name) VALUES (%s, %s)", (shop_id, loc_val))
+                            loc_id = cur.lastrowid
 
-                if "reorder_qty" in item:
+                # 5. Reorder Qty
+                if "reorder_qty" in item and item["reorder_qty"] is not None:
                     try:
-                        rq_val = int(item["reorder_qty"]) if item["reorder_qty"] is not None and str(item["reorder_qty"]).strip() != "" else 0
-                    except ValueError:
-                        rq_val = 0
-                    fields.append("reorder_qty = %s")
-                    params.append(rq_val)
+                        reorder_qty = int(item["reorder_qty"]) if str(item["reorder_qty"]).strip() != "" else 0
+                    except (ValueError, TypeError):
+                        reorder_qty = 0
 
-                if fields:
-                    fields.append("updated_at = NOW()")
-                    await cur.execute(sql, tuple(params))
-                    updated_count += 1
+                # Update product_categories table for product_id
+                await cur.execute("SELECT id FROM product_categories WHERE product = %s LIMIT 1", (item_id,))
+                pc_row = await cur.fetchone()
+                if pc_row:
+                    fields = []
+                    params = []
+                    if cat_id is not None:
+                        fields.append("category = %s")
+                        params.append(cat_id)
+                    if comb_id is not None:
+                        fields.append("combination = %s")
+                        params.append(comb_id)
+                    if manu_id is not None:
+                        fields.append("manufacture = %s")
+                        params.append(manu_id)
+                    if loc_id is not None:
+                        fields.append("location = %s")
+                        params.append(loc_id)
+                    if reorder_qty is not None:
+                        fields.append("reorder_qty = %s")
+                        params.append(str(reorder_qty))
+
+                    if fields:
+                        params.append(item_id)
+                        await cur.execute(f"UPDATE product_categories SET {', '.join(fields)} WHERE product = %s", tuple(params))
+                else:
+                    await cur.execute("""
+                        INSERT INTO product_categories (product, shop_id, category, combination, manufacture, location, reorder_qty, created_by)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, 0)
+                    """, (item_id, shop_id, cat_id or 0, comb_id or 0, manu_id or 0, loc_id or 0, str(reorder_qty or 0)))
+
+                # Update item table for this product and shop_id
+                await cur.execute("SELECT id FROM item WHERE product_table_id = %s AND shop_id = %s LIMIT 1", (item_id, shop_id))
+                item_row = await cur.fetchone()
+                if item_row:
+                    item_fields = []
+                    item_params = []
+                    if cat_id is not None:
+                        item_fields.append("product_category = %s")
+                        item_params.append(cat_id)
+                    if comb_id is not None:
+                        item_fields.append("combination = %s")
+                        item_params.append(comb_id)
+                    if manu_id is not None:
+                        item_fields.append("manufacturer = %s")
+                        item_params.append(manu_id)
+                    if loc_id is not None:
+                        item_fields.append("location = %s")
+                        item_params.append(loc_val or "")
+                    if reorder_qty is not None:
+                        item_fields.append("reorder_qty = %s")
+                        item_params.append(reorder_qty)
+
+                    if item_fields:
+                        item_params.extend([item_id, shop_id])
+                        await cur.execute(f"UPDATE item SET {', '.join(item_fields)} WHERE product_table_id = %s AND shop_id = %s", tuple(item_params))
+
+                updated_count += 1
 
         invalidate_cache(shop_id)
 
@@ -287,6 +368,7 @@ async def update_bulk_products(
             "updated_count": updated_count
         }
     except Exception as e:
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to update products: {str(e)}")
 
 

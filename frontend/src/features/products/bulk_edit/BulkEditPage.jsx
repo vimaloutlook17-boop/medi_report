@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../../AuthContext';
 import { apiConfig } from '../../../config';
 import Loader from '../../../components/Loader';
@@ -51,97 +51,34 @@ export default function BulkEditPage() {
         return;
       }
 
-      let url = `${apiConfig.base_url}/products/bulk-edit?page=0&size=-1`;
+      let url = `${apiConfig.base_url}/products/export-excel`;
       if (appliedSearchTerm && appliedSearchTerm.trim()) {
-        url += `&search=${encodeURIComponent(appliedSearchTerm.trim())}`;
+        url += `?search=${encodeURIComponent(appliedSearchTerm.trim())}`;
       }
 
-      let response = await fetch(url, {
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${activeToken}`
         }
       });
 
-      const result = await response.json();
-      if (result.status === 'success' && result.data) {
-        const escapeHtml = (str) => {
-          if (str === null || str === undefined) return '';
-          return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
-        };
-
-        const headers = ["S.No", "Product Name", "Category", "Combination", "Manufacture", "Location", "Reorder Qty"];
-
-        const tableHtml = `
-          <html xmlns:o="urn:schemas-microsoft-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-          <head>
-            <meta charset="utf-8" />
-            <!--[if gte mso 9]>
-            <xml>
-              <x:ExcelWorkbook>
-                <x:ExcelWorksheets>
-                  <x:ExcelWorksheet>
-                    <x:Name>Bulk Edit Products</x:Name>
-                    <x:WorksheetOptions>
-                      <x:DisplayGridlines/>
-                    </x:WorksheetOptions>
-                  </x:ExcelWorksheet>
-                </x:ExcelWorksheets>
-              </x:ExcelWorkbook>
-            </xml>
-            <![endif]-->
-            <style>
-              th { background-color: #e9ecef; font-weight: bold; border: 0.5pt solid #b0b0b0; padding: 6px 14px; text-align: left; font-size: 13px; font-family: Arial, sans-serif; }
-              td { border: 0.5pt solid #d0d0d0; padding: 6px 14px; text-align: left; font-size: 12.5px; font-family: Arial, sans-serif; mso-number-format: "\\@"; }
-              .num { text-align: right; mso-number-format: "0"; }
-              .center { text-align: center; }
-            </style>
-          </head>
-          <body>
-            <table>
-              <thead>
-                <tr>
-                  ${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}
-                </tr>
-              </thead>
-              <tbody>
-                ${result.data.map((p, i) => `
-                  <tr>
-                    <td class="center">${i + 1}</td>
-                    <td>${escapeHtml(p.name || p.product_name || '')}</td>
-                    <td>${escapeHtml(p.category || '')}</td>
-                    <td>${escapeHtml(p.combination || '')}</td>
-                    <td>${escapeHtml(p.manufacturer || '')}</td>
-                    <td>${escapeHtml(p.location || '')}</td>
-                    <td class="num">${p.reorder_qty !== undefined && p.reorder_qty !== null ? p.reorder_qty : 0}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </body>
-          </html>
-        `;
-
-        const blob = new Blob([tableHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-        const urlObj = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", urlObj);
-        link.setAttribute("download", "bulk_edit_products.xls");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(urlObj);
-      } else {
-        setErrorMsg("Failed to download Excel report.");
+      if (!response.ok) {
+        throw new Error(`Server returned status ${response.status}`);
       }
+
+      const blob = await response.blob();
+      const urlObj = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = urlObj;
+      link.setAttribute("download", "bulk_edit_products.xlsx");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(urlObj);
     } catch (err) {
       console.error("[BulkEdit] Export Error:", err);
-      setErrorMsg("Error generating Excel download.");
+      setErrorMsg("Error downloading Excel report from server.");
     }
   };
 
@@ -249,88 +186,102 @@ export default function BulkEditPage() {
     setPage(0);
   };
 
-  const handleCellChange = (id, field, value) => {
+  // Toast notification state
+  const [toast, setToast] = useState({ show: false, title: 'SUCCESS', message: '' });
+  const toastTimeoutRef = useRef(null);
+
+  const showToast = (message) => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    setToast({ show: true, title: 'SUCCESS', message });
+    toastTimeoutRef.current = setTimeout(() => {
+      setToast({ show: false, title: 'SUCCESS', message: '' });
+    }, 3000);
+  };
+
+  const handleCellChange = async (id, field, value) => {
+    // 1. Update local state immediately for instant UI feedback
     setProducts(prev =>
       prev.map(p => (p.id === id ? { ...p, [field]: value } : p))
     );
-    setEditedProducts(prev => ({
-      ...prev,
-      [id]: {
-        ...(prev[id] || { id }),
-        [field]: value
-      }
-    }));
-  };
 
-  const handleSaveAll = async () => {
-    const updateList = Object.values(editedProducts);
-    if (updateList.length === 0) {
-      setSuccessMsg("No changes detected to save.");
-      return;
-    }
+    const fieldLabels = {
+      category: 'Category',
+      combination: 'Combination',
+      manufacturer: 'Manufacture',
+      manufacture: 'Manufacture',
+      location: 'Location',
+      reorder_qty: 'Reorder Qty'
+    };
 
-    setSaving(true);
-    setErrorMsg('');
-    setSuccessMsg('');
+    const label = fieldLabels[field] || 'Field';
 
     try {
-      let activeToken = await getValidToken();
+      let activeToken = getValidToken();
       if (!activeToken && refreshAuthToken) {
         activeToken = await refreshAuthToken();
       }
 
-      if (!activeToken) {
-        setErrorMsg("Authentication token missing.");
-        setSaving(false);
-        return;
-      }
+      const updateItem = { id, [field]: value };
 
-      let response = await fetch(`${apiConfig.base_url}/products/bulk-edit/update`, {
+      const response = await fetch(`${apiConfig.base_url}/products/bulk-edit/update`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${activeToken}`
         },
-        body: JSON.stringify(updateList)
+        body: JSON.stringify([updateItem])
       });
 
-      if (response.status === 401 && refreshAuthToken) {
-        activeToken = await refreshAuthToken();
-        if (activeToken) {
-          response = await fetch(`${apiConfig.base_url}/products/bulk-edit/update`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${activeToken}`
-            },
-            body: JSON.stringify(updateList)
-          });
+      if (response.ok) {
+        const result = await response.json();
+        if (result.status === 'success') {
+          showToast(`${label} updated successfully`);
+        } else {
+          setErrorMsg(result.detail || result.message || `Failed to update ${label}`);
         }
-      }
-
-      const result = await response.json();
-      if (result.status === 'success') {
-        setSuccessMsg(result.message || `Successfully saved ${updateList.length} product(s)!`);
-        setEditedProducts({});
-        fetchProducts();
       } else {
-        setErrorMsg(result.detail || result.message || "Failed to update products.");
+        setErrorMsg(`Failed to update ${label}`);
       }
     } catch (err) {
-      console.error("[BulkEdit] Save Error:", err);
-      setErrorMsg(err.message || "Error saving changes.");
-    } finally {
-      setSaving(false);
+      console.error("[BulkEdit] Instant Update Error:", err);
+      setErrorMsg(`Error updating ${label}`);
     }
   };
 
   const totalPages = Math.ceil(totalCount / size) || 1;
   const startItem = totalCount > 0 ? page * size + 1 : 0;
   const endItem = totalCount > 0 ? Math.min((page + 1) * size, totalCount) : 0;
-  const modifiedCount = Object.keys(editedProducts).length;
 
   return (
-    <div className="px-[15px] pt-[10px] pb-8 bg-white min-h-screen text-[13px] text-[#333] font-sans">
+    <div className="px-[15px] pt-[10px] pb-8 bg-white min-h-screen text-[13px] text-[#333] font-sans relative">
+      {/* Toast Notification Popup */}
+      {toast.show && (
+        <div 
+          className="fixed top-5 right-5 z-50 min-w-[280px] max-w-[360px] text-white rounded-[4px] p-3 shadow-lg flex items-start justify-between transition-all duration-300"
+          style={{
+            backgroundColor: '#497d59',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+          }}
+        >
+          <div>
+            <div className="font-bold text-[15px] uppercase tracking-wide leading-tight mb-1">
+              {toast.title}
+            </div>
+            <div className="text-[13px] opacity-95">
+              {toast.message}
+            </div>
+          </div>
+          <button
+            onClick={() => setToast({ show: false, title: 'SUCCESS', message: '' })}
+            className="ml-3 text-white text-[16px] font-bold opacity-80 hover:opacity-100 bg-transparent border-none cursor-pointer leading-none"
+          >
+            ×
+          </button>
+        </div>
+      )}
       {/* Page Title */}
       <h3 
         className="uppercase"
@@ -387,16 +338,6 @@ export default function BulkEditPage() {
           <div className="flex items-center ml-auto">
             <ToExcelButton onClick={handlePrintExcelDownload} />
           </div>
-
-          {modifiedCount > 0 && (
-            <button
-              onClick={handleSaveAll}
-              disabled={saving}
-              className="h-[35px] px-5 bg-[#28a745] hover:bg-[#218838] text-white rounded-[4px] text-[13px] font-bold flex items-center gap-1.5 transition shadow-xs cursor-pointer"
-            >
-              {saving ? 'Saving Changes...' : `Save All Changes (${modifiedCount})`}
-            </button>
-          )}
         </div>
       </div>
 
@@ -591,16 +532,13 @@ export default function BulkEditPage() {
               </tr>
             ) : (
               products.map((row, idx) => {
-                const isEdited = !!editedProducts[row.id];
                 const isLastRow = idx === products.length - 1;
                 return (
                   <tr 
                     key={row.id || idx} 
                     className={`transition-colors ${
                       isLastRow ? '' : 'border-b border-[#E9ECEF]'
-                    } ${
-                      isEdited ? 'bg-[#FFF8E1]' : 'bg-white hover:bg-[#F8F9FA]'
-                    }`}
+                    } bg-white hover:bg-[#F8F9FA]`}
                   >
                     <td className="py-2.5 px-3 text-left text-[#212529] text-[13.5px]">
                       {page * size + idx + 1}
@@ -613,6 +551,11 @@ export default function BulkEditPage() {
                         id={`cat_${row.id}`}
                         value={row.category || ''}
                         onChange={(val) => handleCellChange(row.id, 'category', val)}
+                        onAddNew={(newVal) => {
+                          if (newVal && !categoryOptions.includes(newVal)) {
+                            setCategoryOptions(prev => [...prev, newVal].sort());
+                          }
+                        }}
                         options={categoryOptions}
                         placeholder="Type to search or add Cate..."
                         width="200px"
@@ -623,6 +566,11 @@ export default function BulkEditPage() {
                         id={`comb_${row.id}`}
                         value={row.combination || ''}
                         onChange={(val) => handleCellChange(row.id, 'combination', val)}
+                        onAddNew={(newVal) => {
+                          if (newVal && !combinationOptions.includes(newVal)) {
+                            setCombinationOptions(prev => [...prev, newVal].sort());
+                          }
+                        }}
                         options={combinationOptions}
                         placeholder="Type to search or add Com..."
                         width="200px"
@@ -633,6 +581,11 @@ export default function BulkEditPage() {
                         id={`manu_${row.id}`}
                         value={row.manufacturer || ''}
                         onChange={(val) => handleCellChange(row.id, 'manufacturer', val)}
+                        onAddNew={(newVal) => {
+                          if (newVal && !manufacturerOptions.includes(newVal)) {
+                            setManufacturerOptions(prev => [...prev, newVal].sort());
+                          }
+                        }}
                         options={manufacturerOptions}
                         placeholder="Type to search or add Man..."
                         width="200px"
@@ -643,6 +596,11 @@ export default function BulkEditPage() {
                         id={`loc_${row.id}`}
                         value={row.location || ''}
                         onChange={(val) => handleCellChange(row.id, 'location', val)}
+                        onAddNew={(newVal) => {
+                          if (newVal && !locationOptions.includes(newVal)) {
+                            setLocationOptions(prev => [...prev, newVal].sort());
+                          }
+                        }}
                         options={locationOptions}
                         placeholder="Type to search or add Loca..."
                         width="200px"

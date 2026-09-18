@@ -5,6 +5,7 @@ export default function SearchableSelect({
   label,
   value,
   onChange,
+  onAddNew = null,
   placeholder = '-- Select --',
   minChars = 1,
   minCharsMessage,
@@ -64,7 +65,7 @@ export default function SearchableSelect({
     }
   }, [search, isOpen, onSearch, minChars]);
 
-  const displayOptions = (minChars > 0 && search.length < minChars)
+  const rawFilteredOptions = (minChars > 0 && search.length < minChars)
     ? []
     : onSearch
     ? dynamicOptions
@@ -72,6 +73,21 @@ export default function SearchableSelect({
         const text = typeof opt === 'object' ? (opt.label || opt.name || '') : String(opt);
         return text && text !== '0' && text !== '0.00' && text.toLowerCase().includes(search.toLowerCase());
       });
+
+  const searchTrim = search.trim();
+  const hasExactMatch = searchTrim !== '' && options.some((opt) => {
+    const text = typeof opt === 'object' ? (opt.label || opt.name || '') : String(opt);
+    return text.toLowerCase() === searchTrim.toLowerCase();
+  });
+
+  const displayOptions = [...rawFilteredOptions];
+  if (searchTrim !== '' && !hasExactMatch && !(minChars > 0 && search.length < minChars)) {
+    displayOptions.push({
+      isAddNew: true,
+      label: `Add "${searchTrim}"`,
+      value: searchTrim
+    });
+  }
 
   // Ensure highlighted index stays in bounds when display options change
   useEffect(() => {
@@ -97,7 +113,14 @@ export default function SearchableSelect({
   };
 
   const handleSelect = (option) => {
-    onChange(option);
+    let finalValue = option;
+    if (typeof option === 'object' && option.isAddNew) {
+      finalValue = option.value;
+      if (onAddNew) {
+        onAddNew(option.value);
+      }
+    }
+    onChange(finalValue);
     setIsOpen(false);
     setSearch('');
   };
@@ -244,8 +267,9 @@ export default function SearchableSelect({
                 className="max-h-48 overflow-y-auto m-0 p-0 list-none text-[13px] text-[#212529]"
               >
                 {displayOptions.map((option, idx) => {
-                  const labelText = typeof option === 'object' ? (option.label || option.name) : option;
-                  const selected = isOptionSelected(option);
+                  const isAddNew = typeof option === 'object' && option.isAddNew;
+                  const labelText = isAddNew ? option.label : typeof option === 'object' ? (option.label || option.name) : option;
+                  const selected = !isAddNew && isOptionSelected(option);
                   const isHighlighted = idx === highlightedIndex;
 
                   return (
