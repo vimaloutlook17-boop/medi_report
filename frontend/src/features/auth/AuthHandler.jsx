@@ -28,7 +28,13 @@ export default function AuthHandler() {
         redirectPath = '/reports/collection_report';
       } else if (cleanModule === 'op_ip_report') {
         redirectPath = '/reports/op_ip_report';
-      } else if (cleanModule === 'products' || cleanModule === 'product' || cleanModule === 'bulk_edit' || cleanModule === 'bulk-edit') {
+      } else if (
+        cleanModule === 'products' || 
+        cleanModule === 'product' || 
+        cleanModule === 'bulk_edit' || 
+        cleanModule === 'bulk-edit' ||
+        cleanModule === 'bulk_product_edit'
+      ) {
         redirectPath = '/products/bulk-edit';
       }
       

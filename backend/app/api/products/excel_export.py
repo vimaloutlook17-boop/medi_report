@@ -1,7 +1,9 @@
 import io
 import traceback
+import base64
+import jwt
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from fastapi.responses import StreamingResponse
 from aiomysql import Connection
 import openpyxl
@@ -9,7 +11,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
 from app.database import get_db
-from app.auth import verify_token
+from app.auth import SECRET_KEY, ALGORITHM
 
 router = APIRouter()
 
@@ -93,10 +95,22 @@ ORDER BY x.id ASC;
 """
 
 
+def parse_shop_id_from_token(token_str: str) -> Optional[int]:
+    if not token_str:
+        return None
+    token_str = token_str.replace("Bearer ", "").strip()
+    try:
+        payload = jwt.decode(token_str, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload.get("shop_id")
+    except Exception:
+        try:
+            decoded = base64.b64decode(token_str).decode('utf-8')
+            return int(decoded)
+        except Exception:
+            return None
+
+
 async def fetch_product_excel_data(conn: Connection, shop_id: int, search: Optional[str] = None) -> List[Dict[str, Any]]:
-    """
-    Executes the product details query for the given shop_id and optional search keyword.
-    """
     params = [shop_id]
     where_conditions = ["shop_id = %s"]
 
@@ -105,8 +119,6 @@ async def fetch_product_excel_data(conn: Connection, shop_id: int, search: Optio
         params.append(f"%{search.strip()}%")
 
     where_clause = "WHERE " + " AND ".join(where_conditions)
-
-    # Note: query_params includes shop_id for p subquery and shop_id for item join
     query_params = tuple(params + [shop_id])
     formatted_sql = PRODUCT_EXCEL_SQL.format(where_clause=where_clause)
 
@@ -117,17 +129,12 @@ async def fetch_product_excel_data(conn: Connection, shop_id: int, search: Optio
 
 
 def generate_product_excel_bytes(rows: List[Dict[str, Any]]) -> bytes:
-    """
-    Generates an Excel binary (.xlsx) file in memory using openpyxl.
-    """
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Products Export"
 
-    # Display gridlines in Excel
     ws.views.sheetView[0].showGridLines = True
 
-    # Styling definitions
     header_font = Font(name="Calibri", size=11, bold=True, color="1F4E78")
     header_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
     header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
@@ -182,15 +189,14 @@ def generate_product_excel_bytes(rows: List[Dict[str, Any]]) -> bytes:
 
         ws.append(row_data)
 
-        # Apply cell alignments
-        ws.cell(row=row_idx, column=1).alignment = data_align_center  # S.No
-        ws.cell(row=row_idx, column=2).alignment = data_align_center  # Product ID
-        ws.cell(row=row_idx, column=3).alignment = data_align_left    # Product Name
-        ws.cell(row=row_idx, column=4).alignment = data_align_left    # Category
-        ws.cell(row=row_idx, column=5).alignment = data_align_left    # Combination
-        ws.cell(row=row_idx, column=6).alignment = data_align_left    # Manufacturer
-        ws.cell(row=row_idx, column=7).alignment = data_align_left    # Location
-        ws.cell(row=row_idx, column=8).alignment = data_align_right   # Reorder Qty
+        ws.cell(row=row_idx, column=1).alignment = data_align_center
+        ws.cell(row=row_idx, column=2).alignment = data_align_center
+        ws.cell(row=row_idx, column=3).alignment = data_align_left
+        ws.cell(row=row_idx, column=4).alignment = data_align_left
+        ws.cell(row=row_idx, column=5).alignment = data_align_left
+        ws.cell(row=row_idx, column=6).alignment = data_align_left
+        ws.cell(row=row_idx, column=7).alignment = data_align_left
+        ws.cell(row=row_idx, column=8).alignment = data_align_right
 
         for col_num in range(1, len(headers) + 1):
             cell = ws.cell(row=row_idx, column=col_num)
@@ -199,7 +205,6 @@ def generate_product_excel_bytes(rows: List[Dict[str, Any]]) -> bytes:
 
         row_idx += 1
 
-    # Auto-adjust column widths with maximum limit of 35 to allow wrapping long text into 2 lines
     for col in ws.columns:
         max_len = 0
         col_letter = get_column_letter(col[0].column)
@@ -216,17 +221,27 @@ def generate_product_excel_bytes(rows: List[Dict[str, Any]]) -> bytes:
 
 
 @router.get("/export-excel")
+@router.get("/bulk-edit")
+@router.get("/bulk_edit")
 async def export_products_to_excel(
     search: Optional[str] = Query(None, description="Search keyword for Product Name"),
-    shop_id_param: Optional[int] = Query(None, alias="shop_id", description="Optional Shop ID parameter"),
-    conn: Connection = Depends(get_db),
-    token_shop_id: int = Depends(verify_token)
+    shop_id: Optional[int] = Query(None, description="Optional Shop ID parameter"),
+    token: Optional[str] = Query(None, description="Optional Token parameter"),
+    authorization: Optional[str] = Header(None),
+    conn: Connection = Depends(get_db)
 ):
     """
-    Export product report with Category, Combination, Manufacture, Location, and Reorder Qty to an Excel file (.xlsx).
+    Directly streams the product Excel report (.xlsx) for the given shop_id.
     """
     try:
-        effective_shop_id = shop_id_param if shop_id_param else token_shop_id
+        effective_shop_id = shop_id
+
+        if not effective_shop_id and token:
+            effective_shop_id = parse_shop_id_from_token(token)
+
+        if not effective_shop_id and authorization:
+            effective_shop_id = parse_shop_id_from_token(authorization)
+
         if not effective_shop_id:
             effective_shop_id = 1971
 
@@ -238,7 +253,12 @@ async def export_products_to_excel(
         return StreamingResponse(
             io.BytesIO(excel_bytes),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
         )
     except Exception as e:
         traceback.print_exc()

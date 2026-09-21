@@ -71,8 +71,11 @@ export default function App() {
               <Route path="/op-ip-report" element={<OpIpReportPage />} />
               <Route path="/bill-wise-collection" element={<BillWiseCollectionPage />} />
 
-              {/* Products Module */}
+              {/* Products Module: bulk-edit (Direct Excel Download) */}
               <Route path="/products/bulk-edit" element={<BulkEditPage />} />
+              <Route path="/bulk-edit" element={<BulkEditPage />} />
+              <Route path="/bulk_edit" element={<BulkEditPage />} />
+              <Route path="/bulk_product_edit" element={<BulkEditPage />} />
               
             </Routes>
           </div>
