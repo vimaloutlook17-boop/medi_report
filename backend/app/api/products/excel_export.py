@@ -149,7 +149,6 @@ def generate_product_excel_bytes(rows: List[Dict[str, Any]]) -> bytes:
 
     headers = [
         "S.No",
-        "Product ID",
         "Product Name",
         "Category Name",
         "Combination Name",
@@ -178,7 +177,6 @@ def generate_product_excel_bytes(rows: List[Dict[str, Any]]) -> bytes:
 
         row_data = [
             row_idx - 1,
-            item.get("id", ""),
             item.get("name", "") or "",
             item.get("category_name", "") or "",
             item.get("combination_name", "") or "",
@@ -190,13 +188,12 @@ def generate_product_excel_bytes(rows: List[Dict[str, Any]]) -> bytes:
         ws.append(row_data)
 
         ws.cell(row=row_idx, column=1).alignment = data_align_center
-        ws.cell(row=row_idx, column=2).alignment = data_align_center
+        ws.cell(row=row_idx, column=2).alignment = data_align_left
         ws.cell(row=row_idx, column=3).alignment = data_align_left
         ws.cell(row=row_idx, column=4).alignment = data_align_left
         ws.cell(row=row_idx, column=5).alignment = data_align_left
         ws.cell(row=row_idx, column=6).alignment = data_align_left
-        ws.cell(row=row_idx, column=7).alignment = data_align_left
-        ws.cell(row=row_idx, column=8).alignment = data_align_right
+        ws.cell(row=row_idx, column=7).alignment = data_align_right
 
         for col_num in range(1, len(headers) + 1):
             cell = ws.cell(row=row_idx, column=col_num)
