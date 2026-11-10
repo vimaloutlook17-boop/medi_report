@@ -1,0 +1,65 @@
+from fastapi import APIRouter, Query, HTTPException, Request
+from app.auth import create_access_token
+import base64
+import os
+from dotenv import load_dotenv
+
+dotenv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+if os.path.exists(dotenv_path):
+    load_dotenv(dotenv_path)
+else:
+    load_dotenv()
+
+router = APIRouter()
+
+@router.get("/generate-secure-url")
+async def generate_secure_url(
+    request: Request,
+    token: str = Query(..., description="Base64 encoded shop ID (e.g. MTA1Nw==)"),
+    module: str = Query("stocks", description="The module to redirect to (e.g., stocks, sales, doc)")
+):
+    """
+    Generates a JWT and returns a secure URL for the React frontend.
+    The frontend will catch this at /auth, save the token, and redirect to the clean module URL.
+    """
+    try:
+        # Decode the base64 string to get the shop_id
+        decoded_bytes = base64.b64decode(token)
+        shop_id = int(decoded_bytes.decode('utf-8'))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 token provided")
+
+    # 1. Generate the JWT token for this shop_id
+    jwt_token = create_access_token(shop_id)
+    
+    # 2. Build the secure frontend auth URL dynamically based on the current server's address
+    frontend_base = str(request.base_url).rstrip("/")
+    secure_url = f"{frontend_base}/auth?token={jwt_token}&module={module}"
+    
+    # 3. Return the exact JSON structure requested
+    return {
+        "shop_id": shop_id,
+        "token": jwt_token,
+        "url": secure_url
+    }
+
+from app.database import get_db
+from aiomysql import Connection
+from fastapi import Depends
+from app.auth import verify_token
+
+@router.get("/shop-profile")
+async def get_shop_profile(shop_id: int = Depends(verify_token), db: Connection = Depends(get_db)):
+    """Fetches the shop profile data dynamically for printing/display."""
+    try:
+        async with db.cursor() as cur:
+            await cur.execute(
+                "SELECT name, address1, address2, city, state FROM shops WHERE id = %s", 
+                (shop_id,)
+            )
+            row = await cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Shop not found")
+            return row
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
